@@ -17,7 +17,21 @@ body {
     align-items: center;
     gap: 0.5rem;
 }
-
+.first{
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+}
+.second{
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+}
+.third{
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+}
 img {
     width: 20%;
     height: auto;
@@ -54,6 +68,7 @@ form input[type="date"] {
     border-radius: 3rem;
     font-size: 1rem;
     margin-bottom: 0.7rem;
+    gap: 1rem;
 }
 
 /* Login button styles */
@@ -77,13 +92,14 @@ form input[type="submit"]:hover {
 form {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: 0.1rem;
     background-color: #f9f9f9;
-    padding: 1.5rem;
+    padding: 2em;
     border-radius: 1rem;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 300px;
+    width: 650px;
+    justify-content: space-between;
 }
 
 p {

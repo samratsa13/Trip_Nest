@@ -17,21 +17,7 @@ body {
     align-items: center;
     gap: 0.5rem;
 }
-.first{
-    display: flex;
-    flex-direction: row;
-    gap: 1rem;
-}
-.second{
-    display: flex;
-    flex-direction: row;
-    gap: 1rem;
-}
-.third{
-    display: flex;
-    flex-direction: row;
-    gap: 1rem;
-}
+
 img {
     width: 20%;
     height: auto;
@@ -63,7 +49,7 @@ form input[type="email"],
 form input[type="tel"],
 form input[type="date"] {
     width: 100%;
-    padding: 0.6rem;
+    padding: 1rem;
     border: 1px solid #ccc;
     border-radius: 3rem;
     font-size: 1rem;
@@ -91,14 +77,13 @@ form input[type="submit"]:hover {
 form {
     display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     gap: 0.1rem;
     background-color: #f9f9f9;
-    padding: 2em;
+    padding: 1.5rem;
     border-radius: 1rem;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 650px;
-    justify-content: space-between;
+    width: 400px;
 }
 
 p {
