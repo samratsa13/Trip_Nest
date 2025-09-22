@@ -3,7 +3,7 @@ session_start();
 
 // Check if user is already logged in
 if (isset($_SESSION['user_id'])) {
-    header("Location: dashboard.php");
+    header("Location: Tourism.php");
     exit();
 }
 
@@ -67,7 +67,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['user_email'] = $email;
                 
                 // Redirect to dashboard
-                header("Location: dashboard.php");
+                header("Location: Tourism.php?login_success=true");
                 exit();
             } else {
                 $login_error = "Invalid email or password.";
