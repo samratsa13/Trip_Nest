@@ -89,13 +89,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // If no errors, proceed with database operation
     if (empty($errors)) {
-        $conn = new mysqli(localhost, root, , tripnest_db);
+        $conn = new mysqli("localhost", "root","" ,"tripnest_db");
         if ($conn->connect_error) {
             die("Database Connection failed: " . $conn->connect_error);
         }
 
         // Check if email already exists
-        $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $check_stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
         $check_stmt->bind_param("s", $email);
         $check_stmt->execute();
         $check_stmt->store_result();
