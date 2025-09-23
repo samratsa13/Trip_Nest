@@ -50,13 +50,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         
         // Check if user exists
-        $stmt = $conn->prepare("SELECT user_id, name, password FROM users WHERE email = ?");
+        $stmt = $conn->prepare("SELECT user_id, name, password, role FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $stmt->store_result();
         
         if ($stmt->num_rows > 0) {
-            $stmt->bind_result($user_id, $user_name, $hashed_password);
+            $stmt->bind_result($user_id, $user_name, $hashed_password,$role);
             $stmt->fetch();
             
             // Verify password
@@ -65,9 +65,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['user_id'] = $user_id;
                 $_SESSION['user_name'] = $user_name;
                 $_SESSION['user_email'] = $email;
-                
+                 $_SESSION['user_role'] = $role;
+
                 // Redirect to dashboard
+                 if ($role == 'admin') {
+            header('Location: admin.php');
+        } else {
                 header("Location: Tourism.php?login_success=true");
+        }
                 exit();
             } else {
                 $login_error = "Invalid email or password.";

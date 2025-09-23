@@ -332,7 +332,7 @@ $conn->close();
             <div class="btn-group">
                 <button type="submit" name="update_profile" class="btn btn-primary">Update Profile</button>
                 <a href="Tourism.php" class="btn btn-secondary">Back to Home</a>
-                <a href="index.php?logout=true" class="btn btn-danger">Logout</a>
+                <a href="logout.php?logout=true" class="btn btn-danger">Logout</a>
             </div>
         </form>
     </div>

@@ -65,62 +65,50 @@ session_start();
 
 
 
-    <!-- Special Offers Section -->
-    <section id="special-offers">
-        <h2 class="section-title">Special Offers</h2>
-        <p class="section-subtitle">Check out our exclusive travel packages designed to give you the best experience at amazing prices.</p>
+   <section id="special-offers">
+    <h2 class="section-title">Special Offers</h2>
+    <p class="section-subtitle">Check out our exclusive travel packages designed to give you the best experience at amazing prices.</p>
+    
+    <div class="offers-container">
+        <?php
+        require_once 'db_connection.php';
+        $offers = $pdo->query("SELECT * FROM special_offers WHERE status = 'active' LIMIT 3")->fetchAll();
         
-        <div class="offers-container">
-            <div class="offer-card">
-                <img src="img/jungle-resort.jpg" alt="Jungle Resort" class="offer-img">
-                <h3>Jungle Resort</h3>
-                <p>Immerse yourself in nature at our Jungle Resort, offering eco-friendly stays and guided wildlife tours.</p>
-                <button class="offer-button">Book Now</button>
-            </div>
-            <div class="offer-card">
-                <img src="img/mountain-climb.jpg" alt="Mountain Adventure" class="offer-img">
-                <h3>Mountain Adventure</h3>
-                <p>Experience thrilling mountain adventures with guided hikes and outdoor activities.</p>
-                <button class="offer-button">Book Now</button>
-            </div>
-            <div class="offer-card">
-                <img src="img/city.jpg" alt="City Tour" class="offer-img">
-                <h3>City Tour</h3>
-                <p>Discover the hidden gems of the city with our comprehensive city tour packages.</p>
-                <button class="offer-button">Book Now</button>
-            </div>
+        foreach($offers as $offer):
+        ?>
+        <div class="offer-card">
+            <img src="<?php echo $offer['image_path'] ?: 'img/default-offer.jpg'; ?>" alt="<?php echo htmlspecialchars($offer['title']); ?>" class="offer-img">
+            <h3><?php echo htmlspecialchars($offer['title']); ?></h3>
+            <p><?php echo htmlspecialchars($offer['description']); ?></p>
+            <button class="offer-button">Book Now</button>
         </div>
-    </section>
+        <?php endforeach; ?>
+    </div>
+</section>
 
     <!-- Itinerary Section -->
-    <section id="itenary">
-        <h2 class="section-title">Create Your Itinerary</h2>
-        <p class="section-subtitle">Plan your perfect trip with our easy-to-use itinerary builder. Customize your travel plans, add destinations, and organize activities to make the most of your journey.</p>
-        <button class="itenary-button">Create Itinerary</button>
+<section id="itenary">
+    <h2 class="section-title">Create Your Itinerary</h2>
+    <p class="section-subtitle">Plan your perfect trip with our easy-to-use itinerary builder. Customize your travel plans, add destinations, and organize activities to make the most of your journey.</p>
+    <button class="itenary-button">Create Itinerary</button>
+    
+    <h3 class="popular-title">Popular Itineraries</h3>
+    
+    <div class="offers-container">
+        <?php
+        $itineraries = $pdo->query("SELECT * FROM popular_itineraries WHERE status = 'active' LIMIT 3")->fetchAll();
         
-        <h3 class="popular-title">Popular Itineraries</h3>
-        
-        <div class="offers-container">
-            <div class="offer-card">
-                <img src="img/pkr.jpg" alt="Pokhara Valley" class="offer-img">
-                <h3>Pokhara Valley</h3>
-                <p>Explore the scenic beauty of Pokhara Valley with lakeside strolls, mountain views, and adventure activities like paragliding, bungee jumping, zipline and boating.</p>
-                <button class="offer-button">View Details</button>
-            </div>
-            <div class="offer-card">
-                <img src="img/ktm.jpg" alt="Kathmandu Exploration" class="offer-img">
-                <h3>Kathmandu Exploration</h3>
-                <p>Discover the rich heritage of Kathmandu with guided tours to ancient temples, World Heritage sites, and authentic local cuisine experiences.</p>
-                <button class="offer-button">View Details</button>
-            </div>
-            <div class="offer-card">
-                <img src="img/bhr.jpg" alt="Chitwan Adventure" class="offer-img">
-                <h3>Chitwan Adventure</h3>
-                <p>Embark on a thrilling journey in Chitwan with jungle safaris, elephant rides, canoeing, and wildlife spotting in the heart of Nepal's national park.</p>
-                <button class="offer-button">View Details</button>
-            </div>
+        foreach($itineraries as $itinerary):
+        ?>
+        <div class="offer-card">
+            <img src="<?php echo $itinerary['image_path'] ?: 'img/default-itinerary.jpg'; ?>" alt="<?php echo htmlspecialchars($itinerary['title']); ?>" class="offer-img">
+            <h3><?php echo htmlspecialchars($itinerary['title']); ?></h3>
+            <p><?php echo htmlspecialchars($itinerary['description']); ?></p>
+            <button class="offer-button">View Details</button>
         </div>
-    </section>
+        <?php endforeach; ?>
+    </div>
+</section>
 
     <!-- About Us Section -->
     <section id="about-us">
