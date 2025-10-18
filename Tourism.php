@@ -27,6 +27,7 @@ session_start();
         <li><a href="#home" class="active">Home</a></li>
         <li><a href="#special-offers">Special Offers</a></li>
         <li><a href="#itenary">Itinerary</a></li>
+        <li><a href="destination.php">Destinations</a></li>
         <li><a href="#about-us">About Us</a></li>
         <li><a href="#contact">Contact</a></li>
         <?php if (isset($_SESSION['user_id'])): ?>
@@ -52,7 +53,7 @@ session_start();
         <div class="hero-content">
             <h2>Your Trip, From Adventure to Stay.</h2>
             <p>Discover amazing destinations and create unforgettable memories with Trip Nest. We offer personalized travel experiences tailored just for you.</p>
-            <button class="cta-button">Explore Destinations</button>
+            <a href="destination.php"><button class="cta-button">Explore Destinations</button></a>
         </div>
     </section>
 
@@ -91,7 +92,7 @@ session_start();
     <h2 class="section-title">Create Your Itinerary</h2>
     <p class="section-subtitle">Plan your perfect trip with our easy-to-use itinerary builder. Customize your travel plans, add destinations, and organize activities to make the most of your journey.</p>
     <button class="itenary-button">Create Itinerary</button>
-    
+    <br>
     <h3 class="popular-title">Popular Itineraries</h3>
     
     <div class="offers-container">

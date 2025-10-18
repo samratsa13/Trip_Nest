@@ -29,10 +29,10 @@ if ($conn->connect_error) {
     die("Database Connection failed: " . $conn->connect_error);
 }
 
-$stmt = $conn->prepare("SELECT name, dob, address, phone, email FROM users WHERE user_id = ?");
+$stmt = $conn->prepare("SELECT name, dob, address, phone, email, role FROM users WHERE user_id = ?");
 $stmt->bind_param("i", $_SESSION['user_id']);
 $stmt->execute();
-$stmt->bind_result($name, $dob, $address, $phone, $email);
+$stmt->bind_result($name, $dob, $address, $phone, $email, $user_role);
 $stmt->fetch();
 $stmt->close();
 
@@ -220,6 +220,19 @@ $conn->close();
             cursor: pointer;
             transition: all 0.3s ease;
             flex: 1;
+            text-decoration: none;
+        }
+        
+        .btn:hover {
+            text-decoration: none;
+        }
+        
+        .btn:focus {
+            text-decoration: none;
+        }
+        
+        .btn:visited {
+            text-decoration: none;
         }
         
         .btn-primary {
@@ -235,6 +248,11 @@ $conn->close();
         .btn-danger {
             background: #dc3545;
             color: white;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
         }
         
         .btn:hover {
@@ -332,6 +350,9 @@ $conn->close();
             <div class="btn-group">
                 <button type="submit" name="update_profile" class="btn btn-primary">Update Profile</button>
                 <a href="Tourism.php" class="btn btn-secondary">Back to Home</a>
+                <?php if (isset($user_role) && $user_role === 'admin'): ?>
+                    <a href="admin.php" class="btn btn-warning">Admin Dashboard</a>
+                <?php endif; ?>
                 <a href="logout.php?logout=true" class="btn btn-danger">Logout</a>
             </div>
         </form>

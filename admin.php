@@ -10,6 +10,14 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
 // Database connection
 require_once 'db_connection.php';
 
+// Create upload directories if they don't exist
+$upload_dirs = ['uploads/offers/', 'uploads/itineraries/', 'uploads/destinations/'];
+foreach ($upload_dirs as $dir) {
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Add Special Offer
     if (isset($_POST['add_offer'])) {
@@ -21,10 +29,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image_path = '';
         if (isset($_FILES['offer_image']) && $_FILES['offer_image']['error'] == 0) {
             $target_dir = "uploads/offers/";
-            if (!is_dir($target_dir)) {
-                mkdir($target_dir, 0777, true);
-            }
-            
             $image_extension = pathinfo($_FILES['offer_image']['name'], PATHINFO_EXTENSION);
             $image_name = 'offer_' . time() . '.' . $image_extension;
             $target_file = $target_dir . $image_name;
@@ -52,10 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $image_path = '';
         if (isset($_FILES['itinerary_image']) && $_FILES['itinerary_image']['error'] == 0) {
             $target_dir = "uploads/itineraries/";
-            if (!is_dir($target_dir)) {
-                mkdir($target_dir, 0777, true);
-            }
-            
             $image_extension = pathinfo($_FILES['itinerary_image']['name'], PATHINFO_EXTENSION);
             $image_name = 'itinerary_' . time() . '.' . $image_extension;
             $target_file = $target_dir . $image_name;
@@ -140,6 +140,117 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $itinerary_error = "Error updating itinerary status!";
         }
     }
+    
+    // Add Destination
+    if (isset($_POST['add_destination'])) {
+        $name = $_POST['destination_name'];
+        $description = $_POST['destination_description'];
+        $status = $_POST['destination_status'];
+        
+        // Handle image upload
+        $image_path = '';
+        if (isset($_FILES['destination_image']) && $_FILES['destination_image']['error'] == 0) {
+            $target_dir = "uploads/destinations/";
+            $image_extension = pathinfo($_FILES['destination_image']['name'], PATHINFO_EXTENSION);
+            $image_name = 'destination_' . time() . '.' . $image_extension;
+            $target_file = $target_dir . $image_name;
+            
+            if (move_uploaded_file($_FILES['destination_image']['tmp_name'], $target_file)) {
+                $image_path = $target_file;
+            }
+        }
+        
+        $stmt = $pdo->prepare("INSERT INTO destinations (name, description, image_path, status) VALUES (?, ?, ?, ?)");
+        if ($stmt->execute([$name, $description, $image_path, $status])) {
+            $destination_success = "Destination added successfully!";
+        } else {
+            $destination_error = "Error adding destination!";
+        }
+    }
+    
+    // Delete Destination
+    if (isset($_POST['delete_destination'])) {
+        $destination_id = $_POST['destination_id'];
+        
+        // Get image path to delete file
+        $stmt = $pdo->prepare("SELECT image_path FROM destinations WHERE id = ?");
+        $stmt->execute([$destination_id]);
+        $destination = $stmt->fetch();
+        
+        if ($destination && !empty($destination['image_path']) && file_exists($destination['image_path'])) {
+            unlink($destination['image_path']);
+        }
+        
+        $stmt = $pdo->prepare("DELETE FROM destinations WHERE id = ?");
+        if ($stmt->execute([$destination_id])) {
+            $destination_success = "Destination deleted successfully!";
+        } else {
+            $destination_error = "Error deleting destination!";
+        }
+    }
+    
+    // Update Destination Status
+    if (isset($_POST['update_destination_status'])) {
+        $destination_id = $_POST['destination_id'];
+        $status = $_POST['destination_status'];
+        
+        $stmt = $pdo->prepare("UPDATE destinations SET status = ? WHERE id = ?");
+        if ($stmt->execute([$status, $destination_id])) {
+            $destination_success = "Destination status updated successfully!";
+        } else {
+            $destination_error = "Error updating destination status!";
+        }
+    }
+    
+    // Add User
+    if (isset($_POST['add_user'])) {
+        $name = $_POST['user_name'];
+        $email = $_POST['user_email'];
+        $phone = $_POST['user_phone'];
+        $password = $_POST['user_password'];
+        $role = $_POST['user_role'];
+        
+        // Validate input
+        if (empty($name) || empty($email) || empty($password)) {
+            $user_error = "Name, email, and password are required!";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $user_error = "Please enter a valid email address!";
+        } else {
+            // Check if email already exists
+            $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            if ($stmt->fetch()) {
+                $user_error = "Email already exists!";
+            } else {
+                // Hash password
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                
+                $stmt = $pdo->prepare("INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)");
+                if ($stmt->execute([$name, $email, $phone, $hashed_password, $role])) {
+                    $user_success = "User added successfully!";
+                } else {
+                    $user_error = "Error adding user!";
+                }
+            }
+        }
+    }
+    
+    // Delete User
+    if (isset($_POST['delete_user'])) {
+        $user_id = $_POST['user_id'];
+        
+        // Prevent admin from deleting themselves
+        if ($user_id == $_SESSION['user_id']) {
+            $user_error = "You cannot delete your own account!";
+        } else {
+            $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+            if ($stmt->execute([$user_id])) {
+                $user_success = "User deleted successfully!";
+            } else {
+                $user_error = "Error deleting user!";
+            }
+        }
+    }
 }
 
 // Get counts for dashboard
@@ -147,12 +258,18 @@ $user_count = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $order_count = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
 $offer_count = $pdo->query("SELECT COUNT(*) FROM special_offers")->fetchColumn();
 $itinerary_count = $pdo->query("SELECT COUNT(*) FROM popular_itineraries")->fetchColumn();
+$destination_count = $pdo->query("SELECT COUNT(*) FROM destinations")->fetchColumn();
 
-// Get recent users
+// Get data for tables
+$offers = $pdo->query("SELECT * FROM special_offers ORDER BY created_at DESC")->fetchAll();
+$itineraries = $pdo->query("SELECT * FROM popular_itineraries ORDER BY created_at DESC")->fetchAll();
+$destinations = $pdo->query("SELECT * FROM destinations ORDER BY created_at DESC")->fetchAll();
 $recent_users = $pdo->query("SELECT * FROM users ORDER BY created_at DESC LIMIT 5")->fetchAll();
-
-// Get recent orders
 $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN users u ON o.user_id = u.user_id ORDER BY o.created_at DESC LIMIT 5")->fetchAll();
+
+// Get all users and orders for their respective tabs
+$all_users = $pdo->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll();
+$all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN users u ON o.user_id = u.user_id ORDER BY o.created_at DESC")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -553,6 +670,26 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
             padding: 0.3rem 0.7rem;
             font-size: 0.8rem;
         }
+        
+        .text-muted {
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .field-error {
+            color: #dc3545;
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 0.2rem rgba(3, 24, 129, 0.25);
+        }
+        
+        .form-control.error {
+            border-color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -569,6 +706,7 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                 <li><a href="#" data-tab="orders"><i class="fas fa-shopping-cart"></i> <span>Orders</span></a></li>
                 <li><a href="#" data-tab="offers"><i class="fas fa-gift"></i> <span>Special Offers</span></a></li>
                 <li><a href="#" data-tab="itineraries"><i class="fas fa-route"></i> <span>Popular Itineraries</span></a></li>
+                <li><a href="#" data-tab="destinations"><i class="fas fa-map-marker-alt"></i> <span>Destinations</span></a></li>
                 <li><a href="Tourism.php"><i class="fas fa-home"></i> <span>Back to Site</span></a></li>
                 <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
             </ul>
@@ -635,12 +773,23 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                         </div>
                     </div>
                 </div>
+                
+                <div class="card destinations">
+                    <div class="card-header">
+                        <div>
+                            <h3><?php echo $destination_count; ?></h3>
+                            <p>Destinations</p>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="table-container">
                 <div class="table-header">
                     <h3>Recent Users</h3>
-                    <button class="btn btn-primary" onclick="openModal('user')">Add User</button>
                 </div>
                 <table>
                     <thead>
@@ -650,7 +799,6 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                             <th>Email</th>
                             <th>Role</th>
                             <th>Joined</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -661,10 +809,6 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                             <td><?php echo htmlspecialchars($user['email']); ?></td>
                             <td><?php echo htmlspecialchars($user['role']); ?></td>
                             <td><?php echo date('M j, Y', strtotime($user['created_at'])); ?></td>
-                            <td>
-                                <button class="btn btn-warning">Edit</button>
-                                <button class="btn btn-danger">Delete</button>
-                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -684,7 +828,6 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                             <th>Amount</th>
                             <th>Status</th>
                             <th>Date</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -696,10 +839,6 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                             <td>$<?php echo number_format($order['amount'], 2); ?></td>
                             <td><span class="status status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></span></td>
                             <td><?php echo date('M j, Y', strtotime($order['created_at'])); ?></td>
-                            <td>
-                                <button class="btn btn-warning">Edit</button>
-                                <button class="btn btn-danger">Cancel</button>
-                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -712,21 +851,54 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
             <div class="table-container">
                 <div class="table-header">
                     <h3>All Users</h3>
+                </div>
+                <div style="margin-bottom: 1rem;">
                     <button class="btn btn-primary" onclick="openModal('user')">Add User</button>
                 </div>
+                
+                <?php if (isset($user_success)): ?>
+                    <div class="alert alert-success"><?php echo $user_success; ?></div>
+                <?php endif; ?>
+                
+                <?php if (isset($user_error)): ?>
+                    <div class="alert alert-error"><?php echo $user_error; ?></div>
+                <?php endif; ?>
+                
                 <table>
                     <thead>
                         <tr>
                             <th>ID</th>
                             <th>Name</th>
                             <th>Email</th>
+                            <th>Phone</th>
                             <th>Role</th>
                             <th>Joined</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- User data will be loaded here via AJAX -->
+                        <?php foreach($all_users as $user): ?>
+                        <tr>
+                            <td><?php echo $user['user_id']; ?></td>
+                            <td><?php echo htmlspecialchars($user['name']); ?></td>
+                            <td><?php echo htmlspecialchars($user['email']); ?></td>
+                            <td><?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($user['role']); ?></td>
+                            <td><?php echo date('M j, Y', strtotime($user['created_at'])); ?></td>
+                            <td>
+                                <div class="action-buttons">
+                                    <?php if ($user['user_id'] != $_SESSION['user_id']): ?>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
+                                        <button type="submit" name="delete_user" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this user?')">Delete</button>
+                                    </form>
+                                    <?php else: ?>
+                                    <span class="text-muted">Current User</span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
@@ -747,17 +919,25 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                             <th>Amount</th>
                             <th>Status</th>
                             <th>Date</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Order data will be loaded here via AJAX -->
+                        <?php foreach($all_orders as $order): ?>
+                        <tr>
+                            <td>#<?php echo $order['id']; ?></td>
+                            <td><?php echo htmlspecialchars($order['user_name']); ?></td>
+                            <td><?php echo htmlspecialchars($order['package_name']); ?></td>
+                            <td>$<?php echo number_format($order['amount'], 2); ?></td>
+                            <td><span class="status status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></span></td>
+                            <td><?php echo date('M j, Y', strtotime($order['created_at'])); ?></td>
+                        </tr>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         </div>
 
-           <!-- Special Offers Tab -->
+        <!-- Special Offers Tab -->
         <div id="offers" class="tab-content">
             <div class="table-container">
                 <div class="table-header">
@@ -825,7 +1005,7 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
             </div>
         </div>
 
-   <!-- Popular Itineraries Tab -->
+        <!-- Popular Itineraries Tab -->
         <div id="itineraries" class="tab-content">
             <div class="table-container">
                 <div class="table-header">
@@ -892,63 +1072,103 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
                 </table>
             </div>
         </div>
-    </div>
 
-    <!-- Modals -->
-    <div id="userModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New User</h3>
-                <span class="close" onclick="closeModal('userModal')">&times;</span>
+        <!-- Destinations Tab -->
+        <div id="destinations" class="tab-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Destinations</h3>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="openModal('destination')">Add Destination</button>
+                </div>
+                
+                <?php if (isset($destination_success)): ?>
+                    <div class="alert alert-success"><?php echo $destination_success; ?></div>
+                <?php endif; ?>
+                
+                <?php if (isset($destination_error)): ?>
+                    <div class="alert alert-error"><?php echo $destination_error; ?></div>
+                <?php endif; ?>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Image</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach($destinations as $destination): ?>
+                        <tr>
+                            <td><?php echo $destination['id']; ?></td>
+                            <td><?php echo htmlspecialchars($destination['name']); ?></td>
+                            <td><?php echo htmlspecialchars(substr($destination['description'], 0, 100)) . '...'; ?></td>
+                            <td>
+                                <?php if (!empty($destination['image_path'])): ?>
+                                    <img src="<?php echo $destination['image_path']; ?>" alt="Destination Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
+                                <?php else: ?>
+                                    No Image
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="status-badge status-<?php echo $destination['status']; ?>">
+                                    <?php echo ucfirst($destination['status']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="destination_id" value="<?php echo $destination['id']; ?>">
+                                        <select name="destination_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
+                                            <option value="active" <?php echo $destination['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                            <option value="inactive" <?php echo $destination['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                        </select>
+                                        <input type="hidden" name="update_destination_status" value="1">
+                                    </form>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="destination_id" value="<?php echo $destination['id']; ?>">
+                                        <button type="submit" name="delete_destination" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this destination?')">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
-            <form id="userForm">
-                <div class="form-group">
-                    <label for="userName">Full Name</label>
-                    <input type="text" id="userName" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <label for="userEmail">Email</label>
-                    <input type="email" id="userEmail" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <label for="userRole">Role</label>
-                    <select id="userRole" class="form-control" required>
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="userPassword">Password</label>
-                    <input type="password" id="userPassword" class="form-control" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Save User</button>
-            </form>
         </div>
     </div>
 
+    <!-- Offer Modal -->
     <div id="offerModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Add Special Offer</h3>
                 <span class="close" onclick="closeModal('offerModal')">&times;</span>
             </div>
-            <form id="offerForm" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="add_offer" value="1">
                 <div class="form-group">
-                    <label for="offerTitle">Title</label>
-                    <input type="text" id="offerTitle" class="form-control" required>
+                    <label for="offer_title">Title</label>
+                    <input type="text" id="offer_title" name="offer_title" class="form-control" required>
                 </div>
                 <div class="form-group">
-                    <label for="offerDescription">Description</label>
-                    <textarea id="offerDescription" class="form-control" required></textarea>
+                    <label for="offer_description">Description</label>
+                    <textarea id="offer_description" name="offer_description" class="form-control" required></textarea>
                 </div>
-              <div class="form-group">
+                <div class="form-group">
                     <label for="offer_image">Image</label>
                     <input type="file" id="offer_image" name="offer_image" class="form-control" accept="image/*" onchange="previewImage(this, 'offerPreview')">
                     <img id="offerPreview" class="image-preview" src="#" alt="Image Preview">
                 </div>
                 <div class="form-group">
-                    <label for="offerStatus">Status</label>
-                    <select id="offerStatus" class="form-control" required>
+                    <label for="offer_status">Status</label>
+                    <select id="offer_status" name="offer_status" class="form-control" required>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
@@ -958,34 +1178,73 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
         </div>
     </div>
 
+    <!-- Itinerary Modal -->
     <div id="itineraryModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Add Popular Itinerary</h3>
                 <span class="close" onclick="closeModal('itineraryModal')">&times;</span>
             </div>
-            <form id="itineraryForm" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="add_itinerary" value="1">
                 <div class="form-group">
-                    <label for="itineraryTitle">Title</label>
-                    <input type="text" id="itineraryTitle" class="form-control" required>
+                    <label for="itinerary_title">Title</label>
+                    <input type="text" id="itinerary_title" name="itinerary_title" class="form-control" required>
                 </div>
                 <div class="form-group">
-                    <label for="itineraryDescription">Description</label>
-                    <textarea id="itineraryDescription" class="form-control" required></textarea>
+                    <label for="itinerary_description">Description</label>
+                    <textarea id="itinerary_description" name="itinerary_description" class="form-control" required></textarea>
                 </div>
-              <div class="form-group">
+                <div class="form-group">
                     <label for="itinerary_image">Image</label>
                     <input type="file" id="itinerary_image" name="itinerary_image" class="form-control" accept="image/*" onchange="previewImage(this, 'itineraryPreview')">
                     <img id="itineraryPreview" class="image-preview" src="#" alt="Image Preview">
                 </div>
                 <div class="form-group">
-                    <label for="itineraryStatus">Status</label>
-                    <select id="itineraryStatus" class="form-control" required>
+                    <label for="itinerary_status">Status</label>
+                    <select id="itinerary_status" name="itinerary_status" class="form-control" required>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary">Save Itinerary</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- User Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New User</h3>
+                <span class="close" onclick="closeModal('userModal')">&times;</span>
+            </div>
+            <form method="POST" id="userForm">
+                <input type="hidden" name="add_user" value="1">
+                <div class="form-group">
+                    <label for="user_name">Full Name *</label>
+                    <input type="text" id="user_name" name="user_name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="user_email">Email Address *</label>
+                    <input type="email" id="user_email" name="user_email" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="user_phone">Phone Number</label>
+                    <input type="tel" id="user_phone" name="user_phone" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="user_password">Password *</label>
+                    <input type="password" id="user_password" name="user_password" class="form-control" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="user_role">Role *</label>
+                    <select id="user_role" name="user_role" class="form-control" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Create User</button>
             </form>
         </div>
     </div>
@@ -1026,8 +1285,7 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
             });
         });
 
-
-        // img preview option
+        // Image preview function
         function previewImage(input, previewId) {
             const preview = document.getElementById(previewId);
             const file = input.files[0];
@@ -1046,7 +1304,6 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
             }
         }
         
-         
         // Auto-hide alerts after 5 seconds
         setTimeout(function() {
             document.querySelectorAll('.alert').forEach(alert => {
@@ -1054,38 +1311,82 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
             });
         }, 5000);
 
-        // Form submissions
-        document.getElementById('userForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            // Add user logic here
-            alert('User added successfully!');
-            closeModal('userModal');
-        });
-        
-        document.getElementById('offerForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            // Add offer logic here
-            alert('Special offer added successfully!');
-            closeModal('offerModal');
-        });
-        
-        document.getElementById('itineraryForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            // Add itinerary logic here
-            alert('Popular itinerary added successfully!');
-            closeModal('itineraryModal');
-        });
-        
-        // Load data for tabs
-        function loadTabData(tab) {
-            // This would typically make an AJAX request to fetch data
-            console.log('Loading data for: ' + tab);
+        // Form validation
+        function validateForm(formId) {
+            const form = document.getElementById(formId);
+            if (!form) return true;
+            
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    showFieldError(field, 'This field is required');
+                    isValid = false;
+                } else {
+                    clearFieldError(field);
+                    
+                    // Additional validations
+                    if (field.type === 'email' && !isValidEmail(field.value)) {
+                        showFieldError(field, 'Please enter a valid email address');
+                        isValid = false;
+                    }
+                    
+                    if (field.type === 'password' && field.value.length < 6) {
+                        showFieldError(field, 'Password must be at least 6 characters long');
+                        isValid = false;
+                    }
+                }
+            });
+            
+            return isValid;
         }
         
-        // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load initial data
-            loadTabData('dashboard');
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+        
+        function showFieldError(field, message) {
+            clearFieldError(field);
+            field.style.borderColor = '#dc3545';
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'field-error';
+            errorDiv.style.color = '#dc3545';
+            errorDiv.style.fontSize = '0.8rem';
+            errorDiv.style.marginTop = '0.25rem';
+            errorDiv.textContent = message;
+            field.parentNode.appendChild(errorDiv);
+        }
+        
+        function clearFieldError(field) {
+            field.style.borderColor = '';
+            const existingError = field.parentNode.querySelector('.field-error');
+            if (existingError) {
+                existingError.remove();
+            }
+        }
+        
+        // Add form validation to all forms
+        document.getElementById('userForm')?.addEventListener('submit', function(e) {
+            if (!validateForm('userForm')) {
+                e.preventDefault();
+            }
+        });
+        
+        // Real-time validation
+        document.querySelectorAll('input[required], textarea[required]').forEach(field => {
+            field.addEventListener('blur', function() {
+                if (this.value.trim()) {
+                    clearFieldError(this);
+                    if (this.type === 'email' && !isValidEmail(this.value)) {
+                        showFieldError(this, 'Please enter a valid email address');
+                    }
+                    if (this.type === 'password' && this.value.length < 6) {
+                        showFieldError(this, 'Password must be at least 6 characters long');
+                    }
+                }
+            });
         });
     </script>
 </body>

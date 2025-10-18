@@ -258,6 +258,8 @@
             font-weight: 600;
             letter-spacing: 1px;
             z-index: 1;
+            text-decoration: none;
+            display: inline-block;
         }
         
         .cta-button:before {
@@ -331,16 +333,16 @@
             animation-delay: 3s;
         }
         
-        /* Special Offers Section */
-        #special-offers {
+        /* Destinations Section */
+        #destinations {
             padding: 5rem 2rem;
             text-align: center;
-            background: linear-gradient(135deg, #feffff 0%, #4f6679 100%);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             position: relative;
             overflow: hidden;
         }
-        
-        #special-offers:before {
+
+        #destinations:before {
             content: '';
             position: absolute;
             top: 0;
@@ -460,27 +462,6 @@
             box-shadow: 0 5px 15px rgba(3, 24, 129, 0.3);
         }
         
-        /* Itinerary Section */
-        #itenary {
-            padding: 5rem 2rem;
-            text-align: center;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        #itenary:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23031881" fill-opacity="0.05" d="M0,224L48,213.3C96,203,192,181,288,181.3C384,181,480,203,576,192C672,181,768,139,864,128C960,117,1056,139,1152,149.3C1248,160,1344,160,1392,160L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
-            background-size: cover;
-            background-position: bottom;
-        }
-        
         .section-subtitle {
             font-size: 1.3rem;
             max-width: 800px;
@@ -488,73 +469,6 @@
             color: #555;
             text-align: center;
             line-height: 1.6;
-        }
-        
-        .itenary-button {
-            padding: 1rem 2rem;
-            font-size: 1.1rem;
-            border: 2px solid #031881;
-            border-radius: 2rem;
-            background: transparent;
-            color: #031881;
-            cursor: pointer;
-            transition: all 0.4s ease;
-            font-weight: 600;
-            margin: 1.5rem 0;
-            position: relative;
-            overflow: hidden;
-            z-index: 1;
-        }
-        
-        .itenary-button:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, #031881, #6f7ecb);
-            transition: all 0.4s ease;
-            z-index: -1;
-        }
-        
-        .itenary-button:hover {
-            color: white;
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(3, 24, 129, 0.3);
-        }
-        
-        .itenary-button:hover:before {
-            left: 0;
-        }
-        
-        .popular-title {
-            margin-top: 1rem;
-            font-size: 2rem;
-            color: #031881;
-            position: relative;
-            display: inline-block;
-        }
-        
-        .popular-title:after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80px;
-            height: 3px;
-            background: linear-gradient(90deg, #031881, #6f7ecb);
-            border-radius: 2px;
-        }
-        
-        /* Destinations Section */
-        #destinations {
-            padding: 5rem 2rem;
-            text-align: center;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            position: relative;
-            overflow: hidden;
         }
 
         /* About Nepal Section */
@@ -566,13 +480,16 @@
             overflow: hidden;
         }
 
-        /* About Us Section */
-        #about-us {
-            padding: 5rem 2rem;
-            text-align: center;
-            background: linear-gradient(135deg, #feffff 0%, #4f6679 100%);
-            position: relative;
-            overflow: hidden;
+        #about-nepal:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23ffffff" fill-opacity="0.1" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,112C672,96,768,96,864,112C960,128,1056,160,1152,160C1248,160,1344,128,1392,112L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+            background-size: cover;
+            background-position: bottom;
         }
         
         .about-content {
@@ -582,24 +499,10 @@
             z-index: 2;
         }
         
-        .about-logo {
-            width: 180px;
-            height: 180px;
-            border-radius:90%;
-            object-fit: cover;
-            margin-bottom: 1rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-            transition: transform 0.4s ease;
-        }
-        
-        .about-logo:hover {
-            transform: scale(1.05) rotate(5deg);
-        }
-        
         .about-text {
             font-size: 1.2rem;
             color: #333;
-            text-align: justify;
+            text-align: center;
             line-height: 1.8;
             margin-bottom: 1.5rem;
             opacity: 0;
@@ -686,28 +589,51 @@
             transform: translateY(-5px) scale(1.2);
             color: #c3cfe2;
         }
+
         /* User menu styles */
-.user-menu {
-    position: relative;
-}
+        .user-menu {
+            position: relative;
+        }
 
-.user-icon {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
+        .user-icon {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(90deg, #031881, #6f7ecb);
+            color: white !important;
+            padding: 0.5rem 1rem !important;
+            border-radius: 2rem;
+            transition: all 0.3s ease;
+        }
 
-.user-icon i {
-    font-size: 1.2rem;
-}
+        .user-icon i {
+            font-size: 1.1rem;
+        }
 
-/* Responsive adjustments */
-@media (max-width: 968px) {
-    .user-icon {
-        justify-content: center;
-        padding: 1rem 2rem;
-    }
-}
+        .user-icon:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(3, 24, 129, 0.3);
+            color: white !important;
+        }
+
+        /* Remove the underline effect for user icon */
+        .user-icon::after {
+            display: none !important;
+        }
+
+        .user-icon::before {
+            display: none !important;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 968px) {
+            .user-icon {
+                justify-content: center;
+                padding: 1rem 2rem !important;
+                margin: 0.5rem 0;
+            }
+        }
+        
         /* Animations */
         @keyframes fadeInUp {
             from {
@@ -778,51 +704,8 @@
                 font-size: 1.1rem;
             }
             
-            .cta-button, .itenary-button {
+            .cta-button {
                 padding: 0.8rem 1.5rem;
                 font-size: 1rem;
             }
         }
-/* User menu styles */
-.user-menu {
-    position: relative;
-}
-
-.user-icon {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: linear-gradient(90deg, #031881, #6f7ecb);
-    color: white !important;
-    padding: 0.5rem 1rem !important;
-    border-radius: 2rem;
-    transition: all 0.3s ease;
-}
-
-.user-icon i {
-    font-size: 1.1rem;
-}
-
-.user-icon:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(3, 24, 129, 0.3);
-    color: white !important;
-}
-
-/* Remove the underline effect for user icon */
-.user-icon::after {
-    display: none !important;
-}
-
-.user-icon::before {
-    display: none !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 968px) {
-    .user-icon {
-        justify-content: center;
-        padding: 1rem 2rem !important;
-        margin: 0.5rem 0;
-    }
-}
