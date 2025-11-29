@@ -15,7 +15,15 @@ session_start();
     <!-- Navigation -->
 <!-- Navigation -->
 <nav id="navbar">
-    <h1 class="logo">Trip Nest</h1>
+    <div style="display: flex; align-items: center; gap: 2rem;">
+        <h1 class="logo">Trip Nest</h1>
+        <?php if (isset($_SESSION['user_id'])): ?>
+            <a href="cart.php" class="cart-button" id="cartButton">
+                <i class="fas fa-shopping-cart"></i>
+                <span class="cart-count" id="cartCount">0</span>
+            </a>
+        <?php endif; ?>
+    </div>
     
     <div class="menu-btn">
         <span></span>
@@ -81,7 +89,7 @@ session_start();
             <img src="<?php echo $offer['image_path'] ?: 'img/default-offer.jpg'; ?>" alt="<?php echo htmlspecialchars($offer['title']); ?>" class="offer-img">
             <h3><?php echo htmlspecialchars($offer['title']); ?></h3>
             <p><?php echo htmlspecialchars($offer['description']); ?></p>
-            <button class="offer-button">Book Now</button>
+            <button class="offer-button" onclick="addToCart('offer', <?php echo $offer['id']; ?>, '<?php echo htmlspecialchars(addslashes($offer['title'])); ?>', '<?php echo htmlspecialchars(addslashes($offer['description'])); ?>', '<?php echo htmlspecialchars(addslashes($offer['image_path'] ?: 'img/default-offer.jpg')); ?>', 100)">Book Now</button>
         </div>
         <?php endforeach; ?>
     </div>
@@ -89,11 +97,11 @@ session_start();
 
     <!-- Itinerary Section -->
 <section id="itenary">
-    <h2 class="section-title">Create Your Itinerary</h2>
-    <p class="section-subtitle">Plan your perfect trip with our easy-to-use itinerary builder. Customize your travel plans, add destinations, and organize activities to make the most of your journey.</p>
-    <button class="itenary-button">Create Itinerary</button>
+    <h2 class="section-title">Popular Itineraries</h2>
+    <p class="section-subtitle">Plan your perfect trip with our easy-to-use itinerary. Choose your travel plans, add destinations, and activities to make the most of your journey.</p>
+    
     <br>
-    <h3 class="popular-title">Popular Itineraries</h3>
+
     
     <div class="offers-container">
         <?php
@@ -104,8 +112,9 @@ session_start();
         <div class="offer-card">
             <img src="<?php echo $itinerary['image_path'] ?: 'img/default-itinerary.jpg'; ?>" alt="<?php echo htmlspecialchars($itinerary['title']); ?>" class="offer-img">
             <h3><?php echo htmlspecialchars($itinerary['title']); ?></h3>
-            <p><?php echo htmlspecialchars($itinerary['description']); ?></p>
-            <button class="offer-button">View Details</button>
+            <a href="itinerary_details.php?id=<?php echo $itinerary['id']; ?>">
+                <button class="offer-button">View Details</button>
+            </a>
         </div>
         <?php endforeach; ?>
     </div>
@@ -259,6 +268,71 @@ session_start();
             });
         });
 
+        // Cart functionality
+        function addToCart(itemType, itemId, itemName, itemDescription, itemImage, itemPrice) {
+            <?php if (isset($_SESSION['user_id'])): ?>
+                const formData = new FormData();
+                formData.append('item_type', itemType);
+                formData.append('item_id', itemId);
+                formData.append('item_name', itemName);
+                formData.append('item_description', itemDescription);
+                formData.append('item_image', itemImage);
+                formData.append('item_price', itemPrice);
+                
+                fetch('add_to_cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Item added to cart!');
+                        updateCartCount();
+                    } else {
+                        alert(data.message || 'Error adding item to cart');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error adding item to cart');
+                });
+            <?php else: ?>
+                alert('Please login to add items to cart');
+                window.location.href = 'login.php';
+            <?php endif; ?>
+        }
+
+        function updateCartCount() {
+            <?php if (isset($_SESSION['user_id'])): ?>
+                fetch('get_cart_count.php')
+                    .then(response => response.json())
+                    .then(data => {
+                        const cartCount = document.getElementById('cartCount');
+                        if (cartCount) {
+                            if (data.count > 0) {
+                                cartCount.textContent = data.count;
+                                cartCount.style.display = 'inline-flex';
+                            } else {
+                                cartCount.style.display = 'none';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error updating cart count:', error);
+                        const cartCount = document.getElementById('cartCount');
+                        if (cartCount) {
+                            cartCount.style.display = 'none';
+                        }
+                    });
+            <?php endif; ?>
+        }
+
+        // Update cart count on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCartCount();
+            // Update cart count every 5 seconds
+            setInterval(updateCartCount, 5000);
+        });
 
     </script>
 </body>

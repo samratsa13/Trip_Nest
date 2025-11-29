@@ -17,7 +17,15 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
 <body>
     <!-- Navigation -->
     <nav id="navbar">
-        <h1 class="logo">Trip Nest</h1>
+        <div style="display: flex; align-items: center; gap: 2rem;">
+            <h1 class="logo">Trip Nest</h1>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <a href="cart.php" class="cart-button" id="cartButton">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count" id="cartCount">0</span>
+                </a>
+            <?php endif; ?>
+        </div>
         
         <div class="menu-btn">
             <span></span>
@@ -114,7 +122,7 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
                     <img src="<?php echo $destination['image_path'] ?: 'img/default-destination.jpg'; ?>" alt="<?php echo htmlspecialchars($destination['name']); ?>" class="offer-img">
                     <h3><?php echo htmlspecialchars($destination['name']); ?></h3>
                     <p><?php echo htmlspecialchars($destination['description']); ?></p>
-                    <button class="offer-button">Explore <?php echo htmlspecialchars($destination['name']); ?></button>
+                    <button class="offer-button" onclick="addToCart('destination', <?php echo $destination['id']; ?>, '<?php echo htmlspecialchars(addslashes($destination['name'])); ?>', '<?php echo htmlspecialchars(addslashes($destination['description'])); ?>', '<?php echo htmlspecialchars(addslashes($destination['image_path'] ?: 'img/default-destination.jpg')); ?>', 150)">Book Now</button>
                 </div>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -228,6 +236,72 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
             button.addEventListener('mouseleave', function() {
                 this.style.transform = 'translateY(0)';
             });
+        });
+
+        // Cart functionality
+        function addToCart(itemType, itemId, itemName, itemDescription, itemImage, itemPrice) {
+            <?php if (isset($_SESSION['user_id'])): ?>
+                const formData = new FormData();
+                formData.append('item_type', itemType);
+                formData.append('item_id', itemId);
+                formData.append('item_name', itemName);
+                formData.append('item_description', itemDescription);
+                formData.append('item_image', itemImage);
+                formData.append('item_price', itemPrice);
+                
+                fetch('add_to_cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Item added to cart!');
+                        updateCartCount();
+                    } else {
+                        alert(data.message || 'Error adding item to cart');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error adding item to cart');
+                });
+            <?php else: ?>
+                alert('Please login to add items to cart');
+                window.location.href = 'login.php';
+            <?php endif; ?>
+        }
+
+        function updateCartCount() {
+            <?php if (isset($_SESSION['user_id'])): ?>
+                fetch('get_cart_count.php')
+                    .then(response => response.json())
+                    .then(data => {
+                        const cartCount = document.getElementById('cartCount');
+                        if (cartCount) {
+                            if (data.count > 0) {
+                                cartCount.textContent = data.count;
+                                cartCount.style.display = 'inline-flex';
+                            } else {
+                                cartCount.style.display = 'none';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error updating cart count:', error);
+                        const cartCount = document.getElementById('cartCount');
+                        if (cartCount) {
+                            cartCount.style.display = 'none';
+                        }
+                    });
+            <?php endif; ?>
+        }
+
+        // Update cart count on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCartCount();
+            // Update cart count every 5 seconds
+            setInterval(updateCartCount, 5000);
         });
     </script>
 </body>

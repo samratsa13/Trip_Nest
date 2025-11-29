@@ -46,13 +46,60 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
+    // Create itinerary_days table if it doesn't exist
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            itinerary_id INT NOT NULL,
+            day_number INT NOT NULL,
+            day_title VARCHAR(255) NOT NULL,
+            day_description TEXT,
+            activities TEXT,
+            accommodation VARCHAR(255),
+            meals VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (itinerary_id) REFERENCES popular_itineraries(id) ON DELETE CASCADE,
+            INDEX idx_itinerary_id (itinerary_id),
+            UNIQUE KEY unique_day (itinerary_id, day_number)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (PDOException $e) {
+        // Table might already exist
+    }
+    
+    // Create itinerary_days table if it doesn't exist
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            itinerary_id INT NOT NULL,
+            day_number INT NOT NULL,
+            day_title VARCHAR(255) NOT NULL,
+            day_description TEXT,
+            activities TEXT,
+            accommodation VARCHAR(255),
+            meals VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (itinerary_id) REFERENCES popular_itineraries(id) ON DELETE CASCADE,
+            INDEX idx_itinerary_id (itinerary_id),
+            UNIQUE KEY unique_day (itinerary_id, day_number)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (PDOException $e) {
+        // Table might already exist
+    }
+    
+    // Add column for multiple images if it doesn't exist
+    try {
+        $pdo->exec("ALTER TABLE popular_itineraries ADD COLUMN additional_images TEXT COMMENT 'JSON array of additional image paths'");
+    } catch (PDOException $e) {
+        // Column might already exist, continue
+    }
+    
     // Add Popular Itinerary
     if (isset($_POST['add_itinerary'])) {
         $title = $_POST['itinerary_title'];
         $description = $_POST['itinerary_description'];
         $status = $_POST['itinerary_status'];
         
-        // Handle image upload
+        // Handle primary image upload (for backward compatibility)
         $image_path = '';
         if (isset($_FILES['itinerary_image']) && $_FILES['itinerary_image']['error'] == 0) {
             $target_dir = "uploads/itineraries/";
@@ -65,11 +112,73 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
         
-        $stmt = $pdo->prepare("INSERT INTO popular_itineraries (title, description, image_path, status) VALUES (?, ?, ?, ?)");
-        if ($stmt->execute([$title, $description, $image_path, $status])) {
+        // Handle multiple images upload
+        $additional_images = [];
+        $target_dir = "uploads/itineraries/";
+        
+        if (isset($_FILES['itinerary_images']) && is_array($_FILES['itinerary_images']['name'])) {
+            $file_count = count($_FILES['itinerary_images']['name']);
+            
+            for ($i = 0; $i < $file_count; $i++) {
+                if ($_FILES['itinerary_images']['error'][$i] == 0) {
+                    $image_extension = pathinfo($_FILES['itinerary_images']['name'][$i], PATHINFO_EXTENSION);
+                    $image_name = 'itinerary_' . time() . '_' . $i . '.' . $image_extension;
+                    $target_file = $target_dir . $image_name;
+                    
+                    if (move_uploaded_file($_FILES['itinerary_images']['tmp_name'][$i], $target_file)) {
+                        $additional_images[] = $target_file;
+                    }
+                }
+            }
+        }
+        
+        // If no primary image but we have additional images, use first one as primary
+        if (empty($image_path) && !empty($additional_images)) {
+            $image_path = $additional_images[0];
+            array_shift($additional_images); // Remove it from additional images
+        }
+        
+        // Convert additional images array to JSON
+        $additional_images_json = !empty($additional_images) ? json_encode($additional_images) : null;
+        
+        $stmt = $pdo->prepare("INSERT INTO popular_itineraries (title, description, image_path, additional_images, status) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt->execute([$title, $description, $image_path, $additional_images_json, $status])) {
             $itinerary_success = "Popular itinerary added successfully!";
         } else {
             $itinerary_error = "Error adding popular itinerary!";
+        }
+    }
+    
+    // Add Itinerary Day
+    if (isset($_POST['add_itinerary_day'])) {
+        $itinerary_id = $_POST['itinerary_id'];
+        $day_number = $_POST['day_number'];
+        $day_title = $_POST['day_title'];
+        $day_description = $_POST['day_description'] ?? '';
+        $activities = $_POST['activities'] ?? '';
+        $accommodation = $_POST['accommodation'] ?? '';
+        $meals = $_POST['meals'] ?? '';
+        
+        try {
+            $stmt = $pdo->prepare("INSERT INTO itinerary_days (itinerary_id, day_number, day_title, day_description, activities, accommodation, meals) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE day_title = VALUES(day_title), day_description = VALUES(day_description), activities = VALUES(activities), accommodation = VALUES(accommodation), meals = VALUES(meals)");
+            if ($stmt->execute([$itinerary_id, $day_number, $day_title, $day_description, $activities, $accommodation, $meals])) {
+                $itinerary_success = "Day added successfully!";
+            } else {
+                $itinerary_error = "Error adding day!";
+            }
+        } catch (PDOException $e) {
+            $itinerary_error = "Error: " . $e->getMessage();
+        }
+    }
+    
+    // Delete Itinerary Day
+    if (isset($_POST['delete_itinerary_day'])) {
+        $day_id = $_POST['day_id'];
+        $stmt = $pdo->prepare("DELETE FROM itinerary_days WHERE id = ?");
+        if ($stmt->execute([$day_id])) {
+            $itinerary_success = "Day deleted successfully!";
+        } else {
+            $itinerary_error = "Error deleting day!";
         }
     }
     
@@ -1052,6 +1161,9 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                             </td>
                             <td>
                                 <div class="action-buttons">
+                                    <button type="button" class="btn btn-warning btn-sm" onclick="openDayModal(<?php echo $itinerary['id']; ?>, '<?php echo htmlspecialchars($itinerary['title']); ?>')" style="margin-right: 5px;">
+                                        <i class="fas fa-calendar"></i> Manage Days
+                                    </button>
                                     <form method="POST" style="display: inline;">
                                         <input type="hidden" name="itinerary_id" value="<?php echo $itinerary['id']; ?>">
                                         <select name="itinerary_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
@@ -1196,9 +1308,15 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                     <textarea id="itinerary_description" name="itinerary_description" class="form-control" required></textarea>
                 </div>
                 <div class="form-group">
-                    <label for="itinerary_image">Image</label>
+                    <label for="itinerary_image">Primary Image (Optional - First image will be used if not specified)</label>
                     <input type="file" id="itinerary_image" name="itinerary_image" class="form-control" accept="image/*" onchange="previewImage(this, 'itineraryPreview')">
                     <img id="itineraryPreview" class="image-preview" src="#" alt="Image Preview">
+                </div>
+                <div class="form-group">
+                    <label for="itinerary_images">Additional Images (Select multiple images)</label>
+                    <input type="file" id="itinerary_images" name="itinerary_images[]" class="form-control" accept="image/*" multiple onchange="previewMultipleImages(this, 'itineraryImagesPreview')">
+                    <small style="color: #666;">Hold Ctrl/Cmd to select multiple images</small>
+                    <div id="itineraryImagesPreview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem;"></div>
                 </div>
                 <div class="form-group">
                     <label for="itinerary_status">Status</label>
@@ -1209,6 +1327,53 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                 </div>
                 <button type="submit" class="btn btn-primary">Save Itinerary</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Manage Days Modal -->
+    <div id="dayModal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 id="dayModalTitle">Manage Days</h3>
+                <span class="close" onclick="closeModal('dayModal')">&times;</span>
+            </div>
+            <div id="dayModalContent">
+                <div id="existingDays">
+                    <!-- Existing days will be loaded here -->
+                </div>
+                <hr style="margin: 2rem 0;">
+                <h4>Add New Day</h4>
+                <form method="POST" id="addDayForm">
+                    <input type="hidden" name="add_itinerary_day" value="1">
+                    <input type="hidden" name="itinerary_id" id="dayItineraryId">
+                    <div class="form-group">
+                        <label for="day_number">Day Number</label>
+                        <input type="number" id="day_number" name="day_number" class="form-control" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="day_title">Day Title</label>
+                        <input type="text" id="day_title" name="day_title" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="day_description">Day Description</label>
+                        <textarea id="day_description" name="day_description" class="form-control" rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="activities">Activities</label>
+                        <textarea id="activities" name="activities" class="form-control" rows="3" placeholder="List activities for this day"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="accommodation">Accommodation</label>
+                        <input type="text" id="accommodation" name="accommodation" class="form-control" placeholder="Hotel name or accommodation type">
+                    </div>
+                    <div class="form-group">
+                        <label for="meals">Meals</label>
+                        <input type="text" id="meals" name="meals" class="form-control" placeholder="e.g., Breakfast, Lunch, Dinner">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Day</button>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('addDayForm').reset(); calculateNextDayNumber(document.getElementById('dayItineraryId').value);">Clear Form</button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -1304,6 +1469,48 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
             }
         }
         
+        // Preview multiple images
+        function previewMultipleImages(input, previewContainerId) {
+            const previewContainer = document.getElementById(previewContainerId);
+            previewContainer.innerHTML = '';
+            
+            if (input.files && input.files.length > 0) {
+                Array.from(input.files).forEach((file, index) => {
+                    const reader = new FileReader();
+                    
+                    reader.addEventListener('load', function(e) {
+                        const imgDiv = document.createElement('div');
+                        imgDiv.style.position = 'relative';
+                        imgDiv.style.border = '2px solid #e0e0e0';
+                        imgDiv.style.borderRadius = '0.5rem';
+                        imgDiv.style.overflow = 'hidden';
+                        
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.style.width = '100%';
+                        img.style.height = '150px';
+                        img.style.objectFit = 'cover';
+                        
+                        const fileName = document.createElement('p');
+                        fileName.textContent = file.name;
+                        fileName.style.margin = '0.5rem';
+                        fileName.style.fontSize = '0.8rem';
+                        fileName.style.color = '#666';
+                        fileName.style.textAlign = 'center';
+                        fileName.style.overflow = 'hidden';
+                        fileName.style.textOverflow = 'ellipsis';
+                        fileName.style.whiteSpace = 'nowrap';
+                        
+                        imgDiv.appendChild(img);
+                        imgDiv.appendChild(fileName);
+                        previewContainer.appendChild(imgDiv);
+                    });
+                    
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+        
         // Auto-hide alerts after 5 seconds
         setTimeout(function() {
             document.querySelectorAll('.alert').forEach(alert => {
@@ -1387,6 +1594,76 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                     }
                 }
             });
+        });
+        
+        // Day Management Functions
+        function openDayModal(itineraryId, itineraryTitle) {
+            document.getElementById('dayItineraryId').value = itineraryId;
+            document.getElementById('dayModalTitle').textContent = 'Manage Days - ' + itineraryTitle;
+            document.getElementById('dayModal').style.display = 'flex';
+            loadItineraryDays(itineraryId);
+            calculateNextDayNumber(itineraryId);
+        }
+        
+        function calculateNextDayNumber(itineraryId) {
+            fetch('get_itinerary_days.php?itinerary_id=' + itineraryId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.days.length > 0) {
+                        const maxDay = Math.max(...data.days.map(d => d.day_number));
+                        document.getElementById('day_number').value = maxDay + 1;
+                    } else {
+                        document.getElementById('day_number').value = 1;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('day_number').value = 1;
+                });
+        }
+        
+        function loadItineraryDays(itineraryId) {
+            const existingDaysDiv = document.getElementById('existingDays');
+            existingDaysDiv.innerHTML = '<p>Loading days...</p>';
+            
+            fetch('get_itinerary_days.php?itinerary_id=' + itineraryId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.days.length > 0) {
+                        let html = '<h4>Existing Days</h4><div style="display: grid; gap: 1rem; margin-bottom: 1rem;">';
+                        data.days.forEach(day => {
+                            html += `
+                                <div style="border: 1px solid #e0e0e0; border-radius: 0.5rem; padding: 1rem; background: #f9f9f9;">
+                                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                        <h5 style="margin: 0; color: #031881;">Day ${day.day_number}: ${day.day_title}</h5>
+                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this day?');">
+                                            <input type="hidden" name="delete_itinerary_day" value="1">
+                                            <input type="hidden" name="day_id" value="${day.id}">
+                                            <button type="submit" class="btn btn-danger btn-sm" style="padding: 0.3rem 0.7rem; font-size: 0.8rem;">Delete</button>
+                                        </form>
+                                    </div>
+                                    ${day.day_description ? '<p style="margin: 0.5rem 0; color: #666;">' + day.day_description.substring(0, 100) + (day.day_description.length > 100 ? '...' : '') + '</p>' : ''}
+                                    ${day.activities ? '<p style="margin: 0.5rem 0; font-size: 0.9rem;"><strong>Activities:</strong> ' + day.activities.substring(0, 80) + (day.activities.length > 80 ? '...' : '') + '</p>' : ''}
+                                    ${day.accommodation ? '<p style="margin: 0.5rem 0; font-size: 0.9rem;"><strong>Accommodation:</strong> ' + day.accommodation + '</p>' : ''}
+                                    ${day.meals ? '<p style="margin: 0.5rem 0; font-size: 0.9rem;"><strong>Meals:</strong> ' + day.meals + '</p>' : ''}
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        existingDaysDiv.innerHTML = html;
+                    } else {
+                        existingDaysDiv.innerHTML = '<p style="color: #666;">No days added yet. Add your first day below.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading days:', error);
+                    existingDaysDiv.innerHTML = '<p style="color: #dc3545;">Error loading days. Please try again.</p>';
+                });
+        }
+        
+        // Handle form submission to reload days after adding
+        document.getElementById('addDayForm')?.addEventListener('submit', function(e) {
+            // Form will submit normally, then page will reload with success message
+            // Days will be reloaded on next modal open
         });
     </script>
 </body>
