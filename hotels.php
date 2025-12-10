@@ -239,6 +239,18 @@ if (isset($_GET['id'])) {
             background: #f8d7da;
             color: #721c24;
         }
+        
+        .field-error {
+            color: #dc3545;
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+            display: none;
+        }
+        
+        .form-group input.error,
+        .form-group select.error {
+            border-color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -257,8 +269,8 @@ if (isset($_GET['id'])) {
             <li><a href="Tourism.php#special-offers">Special Offers</a></li>
             <li><a href="Tourism.php#itenary">Itinerary</a></li>
             <li><a href="destination.php">Destinations</a></li>
-            <li><a href="hotels.php" class="active">Hotels</a></li>
-            <li><a href="activities.php">Activities</a></li>
+            <!-- <li><a href="hotels.php" class="active">Hotels</a></li>
+            <li><a href="activities.php">Activities</a></li> -->
             <li><a href="Tourism.php#about-us">About Us</a></li>
             <li><a href="Tourism.php#contact">Contact</a></li>
             <?php if (isset($_SESSION['user_id'])): ?>
@@ -380,26 +392,40 @@ if (isset($_GET['id'])) {
                 <div class="form-group">
                     <label>Check-in Date *</label>
                     <input type="date" name="check_in" id="check_in" required min="<?php echo date('Y-m-d'); ?>">
+                    <div id="check_in_error" class="field-error" style="display: none;"></div>
                 </div>
                 
                 <div class="form-group">
                     <label>Check-out Date *</label>
                     <input type="date" name="check_out" id="check_out" required min="<?php echo date('Y-m-d'); ?>">
+                    <div id="check_out_error" class="field-error" style="display: none;"></div>
                 </div>
                 
                 <div class="form-group">
                     <label>Guest Name *</label>
-                    <input type="text" name="guest_name" required value="<?php echo isset($_SESSION['user_name']) ? htmlspecialchars($_SESSION['user_name']) : ''; ?>">
+                    <input type="text" name="guest_name" id="guest_name" 
+                           pattern="^(?!\s)(?!.*\s{3,})(?!.*\d)(?!.*_)(?!.*[^\w\s]).+$" 
+                           title="No leading spaces, no numbers/special chars, no triple spaces"
+                           required value="<?php echo isset($_SESSION['user_name']) ? htmlspecialchars($_SESSION['user_name']) : ''; ?>">
+                    <div id="guest_name_error" class="field-error" style="display: none;"></div>
                 </div>
                 
                 <div class="form-group">
                     <label>Guest Email *</label>
-                    <input type="email" name="guest_email" required value="<?php echo isset($_SESSION['user_email']) ? htmlspecialchars($_SESSION['user_email']) : ''; ?>">
+                    <input type="email" name="guest_email" id="guest_email" 
+                           pattern="^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$" 
+                           title="Start with letter, one dot max before @, letters only domain"
+                           required value="<?php echo isset($_SESSION['user_email']) ? htmlspecialchars($_SESSION['user_email']) : ''; ?>">
+                    <div id="guest_email_error" class="field-error" style="display: none;"></div>
                 </div>
                 
                 <div class="form-group">
                     <label>Guest Phone *</label>
-                    <input type="tel" name="guest_phone" required>
+                    <input type="tel" name="guest_phone" id="guest_phone" 
+                           pattern="^(97|98)[0-9]{8}$" 
+                           title="Must start with 97 or 98 and be exactly 10 digits"
+                           required>
+                    <div id="guest_phone_error" class="field-error" style="display: none;"></div>
                 </div>
                 
                 <div id="totalPrice" style="font-size: 1.2rem; font-weight: 700; color: #031881; margin: 1rem 0; text-align: right;"></div>
@@ -442,7 +468,115 @@ if (isset($_GET['id'])) {
             }
         }
         
+        // Validation functions
+        function validateBookingField(field) {
+            const value = field.value.trim();
+            const fieldId = field.id;
+            const errorElement = document.getElementById(fieldId + '_error');
+            
+            clearBookingError(field, errorElement);
+            
+            if (field.hasAttribute('required') && !value) {
+                showBookingError(field, errorElement, 'This field is required');
+                return false;
+            }
+            
+            if (!value && !field.hasAttribute('required')) {
+                return true;
+            }
+            
+            // Pattern validation
+            if (field.hasAttribute('pattern')) {
+                const pattern = new RegExp(field.getAttribute('pattern'));
+                if (!pattern.test(value)) {
+                    showBookingError(field, errorElement, field.getAttribute('title') || 'Invalid format');
+                    return false;
+                }
+            }
+            
+            // Date validation
+            if (fieldId === 'check_in' && value) {
+                const checkIn = new Date(value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (checkIn < today) {
+                    showBookingError(field, errorElement, 'Check-in date cannot be in the past');
+                    return false;
+                }
+            }
+            
+            if (fieldId === 'check_out' && value) {
+                const checkIn = document.getElementById('check_in').value;
+                if (checkIn && new Date(value) <= new Date(checkIn)) {
+                    showBookingError(field, errorElement, 'Check-out date must be after check-in date');
+                    return false;
+                }
+            }
+            
+            // Email validation
+            if (field.type === 'email' && value) {
+                if (!/^[a-zA-Z]/.test(value)) {
+                    showBookingError(field, errorElement, 'Email must start with a letter');
+                    return false;
+                }
+                const localPart = value.split('@')[0];
+                if ((localPart.match(/\./g) || []).length > 1) {
+                    showBookingError(field, errorElement, 'Email can only contain one dot before @');
+                    return false;
+                }
+            }
+            
+            // Name validation
+            if (fieldId === 'guest_name' && value) {
+                if (/^\s/.test(value)) {
+                    showBookingError(field, errorElement, 'Name cannot start with a space');
+                    return false;
+                }
+                if (/\s{3,}/.test(value)) {
+                    showBookingError(field, errorElement, 'Name cannot have more than two consecutive spaces');
+                    return false;
+                }
+                if (/[0-9]/.test(value)) {
+                    showBookingError(field, errorElement, 'Name cannot contain numbers');
+                    return false;
+                }
+                if (/[^\w\s]/.test(value)) {
+                    showBookingError(field, errorElement, 'Name cannot contain special characters');
+                    return false;
+                }
+            }
+            
+            // Phone validation
+            if (fieldId === 'guest_phone' && value) {
+                const phoneValue = value.replace(/\D/g, '');
+                if (!/^(97|98)[0-9]{8}$/.test(phoneValue)) {
+                    showBookingError(field, errorElement, 'Phone must start with 97 or 98 and be exactly 10 digits');
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+        
+        function showBookingError(field, errorElement, message) {
+            field.style.borderColor = '#dc3545';
+            if (errorElement) {
+                errorElement.textContent = '❌ ' + message;
+                errorElement.style.display = 'block';
+            }
+        }
+        
+        function clearBookingError(field, errorElement) {
+            field.style.borderColor = '';
+            if (errorElement) {
+                errorElement.textContent = '';
+                errorElement.style.display = 'none';
+            }
+        }
+        
+        // Real-time validation
         document.getElementById('check_in')?.addEventListener('change', function() {
+            validateBookingField(this);
             const checkOut = document.getElementById('check_out');
             if (checkOut.value && new Date(checkOut.value) <= new Date(this.value)) {
                 checkOut.value = '';
@@ -451,7 +585,56 @@ if (isset($_GET['id'])) {
             calculateTotal();
         });
         
-        document.getElementById('check_out')?.addEventListener('change', calculateTotal);
+        document.getElementById('check_out')?.addEventListener('change', function() {
+            validateBookingField(this);
+            calculateTotal();
+        });
+        
+        document.getElementById('guest_name')?.addEventListener('input', function() {
+            validateBookingField(this);
+        });
+        
+        document.getElementById('guest_name')?.addEventListener('blur', function() {
+            validateBookingField(this);
+        });
+        
+        document.getElementById('guest_email')?.addEventListener('input', function() {
+            validateBookingField(this);
+        });
+        
+        document.getElementById('guest_email')?.addEventListener('blur', function() {
+            validateBookingField(this);
+        });
+        
+        document.getElementById('guest_phone')?.addEventListener('input', function() {
+            // Auto-format phone (remove non-digits)
+            this.value = this.value.replace(/\D/g, '');
+            validateBookingField(this);
+        });
+        
+        document.getElementById('guest_phone')?.addEventListener('blur', function() {
+            validateBookingField(this);
+        });
+        
+        // Form submission validation
+        document.getElementById('bookingForm')?.addEventListener('submit', function(e) {
+            let isValid = true;
+            const fields = ['check_in', 'check_out', 'guest_name', 'guest_email', 'guest_phone'];
+            fields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field && !validateBookingField(field)) {
+                    isValid = false;
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                const firstError = document.querySelector('.field-error[style*="block"]');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
         
         // Navbar scroll effect
         window.addEventListener('scroll', function() {

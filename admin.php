@@ -95,11 +95,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Add Popular Itinerary
     if (isset($_POST['add_itinerary'])) {
-        $title = $_POST['itinerary_title'];
-        $description = $_POST['itinerary_description'];
-        $status = $_POST['itinerary_status'];
+        $title = trim($_POST['itinerary_title'] ?? '');
+        $description = trim($_POST['itinerary_description'] ?? '');
+        $status = $_POST['itinerary_status'] ?? 'active';
         
-        // Handle primary image upload (for backward compatibility)
+        // Validation
+        $errors = [];
+        
+        if (empty($title)) {
+            $errors[] = "Title is required";
+        } elseif (strlen($title) < 3 || strlen($title) > 100) {
+            $errors[] = "Title must be 3-100 characters";
+        }
+        
+        if (empty($description)) {
+            $errors[] = "Description is required";
+        } elseif (strlen($description) < 10 || strlen($description) > 2000) {
+            $errors[] = "Description must be 10-2000 characters";
+        }
+        
+        if (empty($errors)) {
+            // Handle primary image upload (for backward compatibility)
         $image_path = '';
         if (isset($_FILES['itinerary_image']) && $_FILES['itinerary_image']['error'] == 0) {
             $target_dir = "uploads/itineraries/";
@@ -169,6 +185,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $itinerary_success = "Popular itinerary added successfully!";
         } else {
             $itinerary_error = "Error adding popular itinerary!";
+        }
+        } else {
+            $itinerary_error = implode(", ", $errors);
         }
     }
     
@@ -275,28 +294,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Add Destination
     if (isset($_POST['add_destination'])) {
-        $name = $_POST['destination_name'];
-        $description = $_POST['destination_description'];
-        $status = $_POST['destination_status'];
+        $name = trim($_POST['destination_name'] ?? '');
+        $description = trim($_POST['destination_description'] ?? '');
+        $status = $_POST['destination_status'] ?? 'active';
         
-        // Handle image upload
-        $image_path = '';
-        if (isset($_FILES['destination_image']) && $_FILES['destination_image']['error'] == 0) {
-            $target_dir = "uploads/destinations/";
-            $image_extension = pathinfo($_FILES['destination_image']['name'], PATHINFO_EXTENSION);
-            $image_name = 'destination_' . time() . '.' . $image_extension;
-            $target_file = $target_dir . $image_name;
-            
-            if (move_uploaded_file($_FILES['destination_image']['tmp_name'], $target_file)) {
-                $image_path = $target_file;
-            }
+        // Validation
+        $errors = [];
+        
+        if (empty($name)) {
+            $errors[] = "Destination name is required";
+        } elseif (strlen($name) < 3 || strlen($name) > 100) {
+            $errors[] = "Destination name must be 3-100 characters";
         }
         
-        $stmt = $pdo->prepare("INSERT INTO destinations (name, description, image_path, status) VALUES (?, ?, ?, ?)");
-        if ($stmt->execute([$name, $description, $image_path, $status])) {
-            $destination_success = "Destination added successfully!";
+        if (empty($description)) {
+            $errors[] = "Description is required";
+        } elseif (strlen($description) < 10 || strlen($description) > 1000) {
+            $errors[] = "Description must be 10-1000 characters";
+        }
+        
+        if (empty($errors)) {
+            // Handle image upload
+            $image_path = '';
+            if (isset($_FILES['destination_image']) && $_FILES['destination_image']['error'] == 0) {
+                $target_dir = "uploads/destinations/";
+                $image_extension = pathinfo($_FILES['destination_image']['name'], PATHINFO_EXTENSION);
+                $image_name = 'destination_' . time() . '.' . $image_extension;
+                $target_file = $target_dir . $image_name;
+                
+                if (move_uploaded_file($_FILES['destination_image']['tmp_name'], $target_file)) {
+                    $image_path = $target_file;
+                }
+            }
+            
+            $stmt = $pdo->prepare("INSERT INTO destinations (name, description, image_path, status) VALUES (?, ?, ?, ?)");
+            if ($stmt->execute([$name, $description, $image_path, $status])) {
+                $destination_success = "Destination added successfully!";
+            } else {
+                $destination_error = "Error adding destination!";
+            }
         } else {
-            $destination_error = "Error adding destination!";
+            $destination_error = implode(", ", $errors);
         }
     }
     
@@ -334,90 +372,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Create hotels, rooms, activities, and bookings tables
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS hotels (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            location VARCHAR(255),
-            image_path VARCHAR(255),
-            status VARCHAR(50) DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
-        $pdo->exec("CREATE TABLE IF NOT EXISTS hotel_rooms (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            hotel_id INT NOT NULL,
-            room_type VARCHAR(100) NOT NULL,
-            ac_type VARCHAR(50) NOT NULL,
-            price_npr DECIMAL(10, 2) NOT NULL,
-            available INT DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
-            INDEX idx_hotel_id (hotel_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
-        $pdo->exec("CREATE TABLE IF NOT EXISTS activities (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            image_path VARCHAR(255),
-            price_npr DECIMAL(10, 2) NOT NULL,
-            status VARCHAR(50) DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
-        $pdo->exec("CREATE TABLE IF NOT EXISTS hotel_bookings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            hotel_id INT NOT NULL,
-            room_id INT NOT NULL,
-            check_in DATE NOT NULL,
-            check_out DATE NOT NULL,
-            guest_name VARCHAR(255) NOT NULL,
-            guest_email VARCHAR(255) NOT NULL,
-            guest_phone VARCHAR(50) NOT NULL,
-            total_price_npr DECIMAL(10, 2) NOT NULL,
-            status VARCHAR(50) DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-            FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
-            FOREIGN KEY (room_id) REFERENCES hotel_rooms(id) ON DELETE CASCADE,
-            INDEX idx_user_id (user_id),
-            INDEX idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
-        $pdo->exec("CREATE TABLE IF NOT EXISTS activity_bookings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            activity_id INT NOT NULL,
-            booking_date DATE NOT NULL,
-            guest_name VARCHAR(255) NOT NULL,
-            guest_email VARCHAR(255) NOT NULL,
-            guest_phone VARCHAR(50) NOT NULL,
-            total_price_npr DECIMAL(10, 2) NOT NULL,
-            status VARCHAR(50) DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-            FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE,
-            INDEX idx_user_id (user_id),
-            INDEX idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } catch (PDOException $e) {
-        // Tables might already exist
-    }
-    
     // Add Hotel
     if (isset($_POST['add_hotel'])) {
-        $name = $_POST['hotel_name'];
-        $description = $_POST['hotel_description'];
-        $location = $_POST['hotel_location'];
-        $status = $_POST['hotel_status'];
+        $name = trim($_POST['hotel_name'] ?? '');
+        $description = trim($_POST['hotel_description'] ?? '');
+        $location = trim($_POST['hotel_location'] ?? '');
+        $status = $_POST['hotel_status'] ?? 'active';
         
-        $image_path = '';
+        // Validation
+        $errors = [];
+        
+        if (empty($name)) {
+            $errors[] = "Hotel name is required";
+        } elseif (strlen($name) < 3 || strlen($name) > 100) {
+            $errors[] = "Hotel name must be 3-100 characters";
+        }
+        
+        if (!empty($description) && strlen($description) > 1000) {
+            $errors[] = "Description must be maximum 1000 characters";
+        }
+        
+        if (empty($location)) {
+            $errors[] = "Location is required";
+        } elseif (strlen($location) < 3 || strlen($location) > 100) {
+            $errors[] = "Location must be 3-100 characters";
+        } elseif (!preg_match('/^[a-zA-Z0-9\s,\-]{3,100}$/', $location)) {
+            $errors[] = "Location can only contain letters, numbers, spaces, commas, and hyphens";
+        }
+        
+        if (empty($errors)) {
+            $image_path = '';
         if (isset($_FILES['hotel_image']) && $_FILES['hotel_image']['error'] == 0) {
             $target_dir = "uploads/hotels/";
             if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
@@ -453,8 +437,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     }
                 }
             }
+            } else {
+                $hotel_error = "Error adding hotel!";
+            }
         } else {
-            $hotel_error = "Error adding hotel!";
+            $hotel_error = implode(", ", $errors);
         }
     }
     
@@ -493,29 +480,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Add Activity
     if (isset($_POST['add_activity'])) {
-        $name = $_POST['activity_name'];
-        $description = $_POST['activity_description'];
-        $price_npr = $_POST['activity_price_npr'];
-        $status = $_POST['activity_status'];
+        $name = trim($_POST['activity_name'] ?? '');
+        $description = trim($_POST['activity_description'] ?? '');
+        $price_npr = $_POST['activity_price_npr'] ?? 0;
+        $status = $_POST['activity_status'] ?? 'active';
         
-        $image_path = '';
-        if (isset($_FILES['activity_image']) && $_FILES['activity_image']['error'] == 0) {
-            $target_dir = "uploads/activities/";
-            if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-            $image_extension = pathinfo($_FILES['activity_image']['name'], PATHINFO_EXTENSION);
-            $image_name = 'activity_' . time() . '.' . $image_extension;
-            $target_file = $target_dir . $image_name;
-            
-            if (move_uploaded_file($_FILES['activity_image']['tmp_name'], $target_file)) {
-                $image_path = $target_file;
-            }
+        // Validation
+        $errors = [];
+        
+        if (empty($name)) {
+            $errors[] = "Activity name is required";
+        } elseif (strlen($name) < 3 || strlen($name) > 100) {
+            $errors[] = "Activity name must be 3-100 characters";
         }
         
-        $stmt = $pdo->prepare("INSERT INTO activities (name, description, image_path, price_npr, status) VALUES (?, ?, ?, ?, ?)");
-        if ($stmt->execute([$name, $description, $image_path, $price_npr, $status])) {
-            $activity_success = "Activity added successfully!";
+        if (!empty($description) && strlen($description) > 1000) {
+            $errors[] = "Description must be maximum 1000 characters";
+        }
+        
+        if (empty($price_npr) || !is_numeric($price_npr)) {
+            $errors[] = "Price is required and must be a valid number";
+        } elseif ($price_npr < 1 || $price_npr > 9999999.99) {
+            $errors[] = "Price must be between NPR 1 and 9,999,999.99";
+        }
+        
+        if (empty($errors)) {
+            $image_path = '';
+            if (isset($_FILES['activity_image']) && $_FILES['activity_image']['error'] == 0) {
+                $target_dir = "uploads/activities/";
+                if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+                $image_extension = pathinfo($_FILES['activity_image']['name'], PATHINFO_EXTENSION);
+                $image_name = 'activity_' . time() . '.' . $image_extension;
+                $target_file = $target_dir . $image_name;
+                
+                if (move_uploaded_file($_FILES['activity_image']['tmp_name'], $target_file)) {
+                    $image_path = $target_file;
+                }
+            }
+            
+            $stmt = $pdo->prepare("INSERT INTO activities (name, description, image_path, price_npr, status) VALUES (?, ?, ?, ?, ?)");
+            if ($stmt->execute([$name, $description, $image_path, $price_npr, $status])) {
+                $activity_success = "Activity added successfully!";
+            } else {
+                $activity_error = "Error adding activity!";
+            }
         } else {
-            $activity_error = "Error adding activity!";
+            $activity_error = implode(", ", $errors);
         }
     }
     
@@ -569,18 +579,57 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Add User
     if (isset($_POST['add_user'])) {
-        $name = $_POST['user_name'];
-        $email = $_POST['user_email'];
-        $phone = $_POST['user_phone'];
-        $password = $_POST['user_password'];
-        $role = $_POST['user_role'];
+        $name = trim($_POST['user_name'] ?? '');
+        $email = trim($_POST['user_email'] ?? '');
+        $phone = trim($_POST['user_phone'] ?? '');
+        $password = $_POST['user_password'] ?? '';
+        $role = $_POST['user_role'] ?? 'user';
         
-        // Validate input
-        if (empty($name) || empty($email) || empty($password)) {
-            $user_error = "Name, email, and password are required!";
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $user_error = "Please enter a valid email address!";
-        } else {
+        // Validation
+        $errors = [];
+        
+        if (empty($name)) {
+            $errors[] = "Name is required";
+        } elseif (preg_match('/^\s/', $name)) {
+            $errors[] = "Name cannot start with a space";
+        } elseif (preg_match('/\s{3,}/', $name)) {
+            $errors[] = "Name cannot have more than two consecutive spaces";
+        } elseif (preg_match('/[0-9]/', $name)) {
+            $errors[] = "Name cannot contain numbers";
+        } elseif (preg_match('/[^\w\s]/', $name)) {
+            $errors[] = "Name cannot contain special characters";
+        }
+        
+        if (empty($email)) {
+            $errors[] = "Email is required";
+        } elseif (!preg_match('/^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$/', $email)) {
+            $errors[] = "Email must start with a letter, have one dot max before @, and letters only domain";
+        }
+        
+        if (!empty($phone)) {
+            $phone_clean = preg_replace('/\D/', '', $phone);
+            if (!preg_match('/^(97|98)[0-9]{8}$/', $phone_clean)) {
+                $errors[] = "Phone must start with 97 or 98 and be exactly 10 digits";
+            }
+        }
+        
+        if (empty($password)) {
+            $errors[] = "Password is required";
+        } elseif (strlen($password) < 8) {
+            $errors[] = "Password must be at least 8 characters";
+        } elseif (!preg_match('/[A-Z]/', $password)) {
+            $errors[] = "Password must contain at least one uppercase letter";
+        } elseif (!preg_match('/[a-z]/', $password)) {
+            $errors[] = "Password must contain at least one lowercase letter";
+        } elseif (!preg_match('/[0-9]/', $password)) {
+            $errors[] = "Password must contain at least one number";
+        } elseif (!preg_match('/[^\w]/', $password)) {
+            $errors[] = "Password must contain at least one special character";
+        } elseif (preg_match('/\s/', $password)) {
+            $errors[] = "Password cannot contain spaces";
+        }
+        
+        if (empty($errors)) {
             // Check if email already exists
             $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
             $stmt->execute([$email]);
@@ -624,6 +673,87 @@ $order_count = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
 $offer_count = $pdo->query("SELECT COUNT(*) FROM special_offers")->fetchColumn();
 $itinerary_count = $pdo->query("SELECT COUNT(*) FROM popular_itineraries")->fetchColumn();
 $destination_count = $pdo->query("SELECT COUNT(*) FROM destinations")->fetchColumn();
+
+// Get hotels, activities, and bookings counts
+try {
+    $hotel_count = $pdo->query("SELECT COUNT(*) FROM hotels")->fetchColumn();
+} catch (PDOException $e) {
+    $hotel_count = 0;
+}
+
+try {
+    $activity_count = $pdo->query("SELECT COUNT(*) FROM activities")->fetchColumn();
+} catch (PDOException $e) {
+    $activity_count = 0;
+}
+
+try {
+    $total_bookings = $pdo->query("SELECT COUNT(*) FROM hotel_bookings")->fetchColumn() + 
+                      $pdo->query("SELECT COUNT(*) FROM activity_bookings")->fetchColumn();
+} catch (PDOException $e) {
+    $total_bookings = 0;
+}
+
+// Get comprehensive reporting data
+try {
+    // Booking statistics
+    $hotel_bookings_count = $pdo->query("SELECT COUNT(*) FROM hotel_bookings")->fetchColumn();
+    $activity_bookings_count = $pdo->query("SELECT COUNT(*) FROM activity_bookings")->fetchColumn();
+    
+    // Booking status breakdown
+    $booking_status_stats = [
+        'pending' => $pdo->query("SELECT COUNT(*) FROM hotel_bookings WHERE status = 'pending'")->fetchColumn() + 
+                     $pdo->query("SELECT COUNT(*) FROM activity_bookings WHERE status = 'pending'")->fetchColumn(),
+        'approved' => $pdo->query("SELECT COUNT(*) FROM hotel_bookings WHERE status = 'approved'")->fetchColumn() + 
+                      $pdo->query("SELECT COUNT(*) FROM activity_bookings WHERE status = 'approved'")->fetchColumn(),
+        'rejected' => $pdo->query("SELECT COUNT(*) FROM hotel_bookings WHERE status = 'rejected'")->fetchColumn() + 
+                      $pdo->query("SELECT COUNT(*) FROM activity_bookings WHERE status = 'rejected'")->fetchColumn(),
+    ];
+    
+    // Revenue statistics
+    $total_revenue_orders = $pdo->query("SELECT COALESCE(SUM(amount), 0) FROM orders")->fetchColumn();
+    $total_revenue_hotel = $pdo->query("SELECT COALESCE(SUM(total_price_npr), 0) FROM hotel_bookings WHERE status = 'approved'")->fetchColumn();
+    $total_revenue_activity = $pdo->query("SELECT COALESCE(SUM(total_price_npr), 0) FROM activity_bookings WHERE status = 'approved'")->fetchColumn();
+    $total_revenue = $total_revenue_orders + $total_revenue_hotel + $total_revenue_activity;
+    
+    // Monthly bookings trend (last 6 months)
+    $monthly_bookings = [];
+    for ($i = 5; $i >= 0; $i--) {
+        $month = date('Y-m', strtotime("-$i months"));
+        $hotel_count = $pdo->query("SELECT COUNT(*) FROM hotel_bookings WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
+        $activity_count = $pdo->query("SELECT COUNT(*) FROM activity_bookings WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
+        $monthly_bookings[] = [
+            'month' => date('M Y', strtotime("-$i months")),
+            'hotel' => $hotel_count,
+            'activity' => $activity_count,
+            'total' => $hotel_count + $activity_count
+        ];
+    }
+    
+    // Monthly orders trend (last 6 months)
+    $monthly_orders = [];
+    for ($i = 5; $i >= 0; $i--) {
+        $month = date('Y-m', strtotime("-$i months"));
+        $order_count = $pdo->query("SELECT COUNT(*) FROM orders WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
+        $order_revenue = $pdo->query("SELECT COALESCE(SUM(amount), 0) FROM orders WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
+        $monthly_orders[] = [
+            'month' => date('M Y', strtotime("-$i months")),
+            'count' => $order_count,
+            'revenue' => $order_revenue
+        ];
+    }
+    
+} catch (PDOException $e) {
+    $hotel_bookings_count = 0;
+    $activity_bookings_count = 0;
+    $booking_status_stats = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
+    $total_revenue = 0;
+    $total_revenue_orders = 0;
+    $total_revenue_hotel = 0;
+    $total_revenue_activity = 0;
+    $monthly_bookings = [];
+    $monthly_orders = [];
+}
 
 // Get data for tables
 $offers = $pdo->query("SELECT * FROM special_offers ORDER BY created_at DESC")->fetchAll();
@@ -677,6 +807,7 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Trip Nest</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #031881;
@@ -831,6 +962,10 @@ try {
         .orders .card-icon { background: rgba(255, 193, 7, 0.2); color: var(--warning); }
         .offers .card-icon { background: rgba(3, 24, 129, 0.2); color: var(--primary); }
         .itineraries .card-icon { background: rgba(220, 53, 69, 0.2); color: var(--danger); }
+        .destinations .card-icon { background: rgba(23, 162, 184, 0.2); color: #17a2b8; }
+        .hotels .card-icon { background: rgba(111, 126, 203, 0.2); color: var(--secondary); }
+        .activities .card-icon { background: rgba(255, 87, 34, 0.2); color: #ff5722; }
+        .bookings .card-icon { background: rgba(156, 39, 176, 0.2); color: #9c27b0; }
         
         .card h3 {
             font-size: 1.8rem;
@@ -1186,6 +1321,117 @@ try {
                             <i class="fas fa-map-marker-alt"></i>
                         </div>
                     </div>
+                </div>
+                
+                <div class="card hotels">
+                    <div class="card-header">
+                        <div>
+                            <h3><?php echo $hotel_count; ?></h3>
+                            <p>Hotels</p>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-hotel"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card activities">
+                    <div class="card-header">
+                        <div>
+                            <h3><?php echo $activity_count; ?></h3>
+                            <p>Activities</p>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-hiking"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card bookings">
+                    <div class="card-header">
+                        <div>
+                            <h3><?php echo $total_bookings; ?></h3>
+                            <p>Total Bookings</p>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Comprehensive Reports Section -->
+            <div style="margin-top: 2rem;">
+                <h2 style="margin-bottom: 1.5rem; color: var(--primary);">📊 Comprehensive Reports</h2>
+                
+                <!-- Revenue Overview -->
+                <div class="table-container" style="margin-bottom: 2rem;">
+                    <div class="table-header">
+                        <h3>Revenue Overview</h3>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #031881, #6f7ecb); color: white; border-radius: 0.5rem;">
+                            <h4 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Total Revenue</h4>
+                            <h2 style="margin: 0.5rem 0; font-size: 2rem;">NPR <?php echo number_format($total_revenue, 2); ?></h2>
+                        </div>
+                        <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
+                            <h4 style="margin: 0; color: #666;">Orders Revenue</h4>
+                            <h3 style="margin: 0.5rem 0; color: var(--primary);">NPR <?php echo number_format($total_revenue_orders, 2); ?></h3>
+                        </div>
+                        <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
+                            <h4 style="margin: 0; color: #666;">Hotel Bookings</h4>
+                            <h3 style="margin: 0.5rem 0; color: var(--secondary);">NPR <?php echo number_format($total_revenue_hotel, 2); ?></h3>
+                        </div>
+                        <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
+                            <h4 style="margin: 0; color: #666;">Activity Bookings</h4>
+                            <h3 style="margin: 0.5rem 0; color: #ff5722;">NPR <?php echo number_format($total_revenue_activity, 2); ?></h3>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Charts Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                    <!-- Bookings Type Comparison -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Bookings Type Comparison</h3>
+                        </div>
+                        <canvas id="bookingsTypeChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                    <!-- Booking Status Breakdown -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Booking Status Breakdown</h3>
+                        </div>
+                        <canvas id="bookingStatusChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                    <!-- Monthly Bookings Trend -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Monthly Bookings Trend (Last 6 Months)</h3>
+                        </div>
+                        <canvas id="monthlyBookingsChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                    <!-- Monthly Orders Trend -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Monthly Orders Trend (Last 6 Months)</h3>
+                        </div>
+                        <canvas id="monthlyOrdersChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Revenue Breakdown -->
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Revenue Breakdown by Source</h3>
+                    </div>
+                    <canvas id="revenueChart" style="max-height: 300px;"></canvas>
                 </div>
             </div>
 
@@ -1845,15 +2091,24 @@ try {
                 <h3>Add Special Offer</h3>
                 <span class="close" onclick="closeModal('offerModal')">&times;</span>
             </div>
-            <form method="POST" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data" id="offerForm">
                 <input type="hidden" name="add_offer" value="1">
                 <div class="form-group">
-                    <label for="offer_title">Title</label>
-                    <input type="text" id="offer_title" name="offer_title" class="form-control" required>
+                    <label for="offer_title">Title *</label>
+                    <input type="text" id="offer_title" name="offer_title" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Title must be 3-100 characters"
+                           required>
+                    <div id="offer_title_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
-                    <label for="offer_description">Description</label>
-                    <textarea id="offer_description" name="offer_description" class="form-control" required></textarea>
+                    <label for="offer_description">Description *</label>
+                    <textarea id="offer_description" name="offer_description" class="form-control" 
+                              minlength="10" 
+                              maxlength="1000"
+                              title="Description must be 10-1000 characters"
+                              required></textarea>
+                    <div id="offer_description_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="offer_image">Image</label>
@@ -1883,12 +2138,21 @@ try {
                 <input type="hidden" name="add_itinerary" value="1">
                 <input type="hidden" name="itinerary_days_json" id="itinerary_days_json">
                 <div class="form-group">
-                    <label for="itinerary_title">Title</label>
-                    <input type="text" id="itinerary_title" name="itinerary_title" class="form-control" required>
+                    <label for="itinerary_title">Title *</label>
+                    <input type="text" id="itinerary_title" name="itinerary_title" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Title must be 3-100 characters"
+                           required>
+                    <div id="itinerary_title_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
-                    <label for="itinerary_description">Description</label>
-                    <textarea id="itinerary_description" name="itinerary_description" class="form-control" required></textarea>
+                    <label for="itinerary_description">Description *</label>
+                    <textarea id="itinerary_description" name="itinerary_description" class="form-control" 
+                              minlength="10" 
+                              maxlength="2000"
+                              title="Description must be 10-2000 characters"
+                              required></textarea>
+                    <div id="itinerary_description_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="itinerary_image">Primary Image (Optional - First image will be used if not specified)</label>
@@ -1941,12 +2205,20 @@ try {
                     <input type="hidden" name="add_itinerary_day" value="1">
                     <input type="hidden" name="itinerary_id" id="dayItineraryId">
                     <div class="form-group">
-                        <label for="day_number">Day Number</label>
-                        <input type="number" id="day_number" name="day_number" class="form-control" min="1" required>
+                        <label for="day_number">Day Number *</label>
+                        <input type="number" id="day_number" name="day_number" class="form-control" 
+                               min="1" max="365"
+                               title="Day number must be between 1 and 365"
+                               required>
+                        <div id="day_number_error" class="field-error"></div>
                     </div>
                     <div class="form-group">
-                        <label for="day_title">Day Title</label>
-                        <input type="text" id="day_title" name="day_title" class="form-control" required>
+                        <label for="day_title">Day Title *</label>
+                        <input type="text" id="day_title" name="day_title" class="form-control" 
+                               pattern="^.{3,100}$" 
+                               title="Day title must be 3-100 characters"
+                               required>
+                        <div id="day_title_error" class="field-error"></div>
                     </div>
                     <div class="form-group">
                         <label for="day_description">Day Description</label>
@@ -1982,19 +2254,34 @@ try {
                 <input type="hidden" name="add_user" value="1">
                 <div class="form-group">
                     <label for="user_name">Full Name *</label>
-                    <input type="text" id="user_name" name="user_name" class="form-control" required>
+                    <input type="text" id="user_name" name="user_name" class="form-control" 
+                           pattern="^(?!\s)(?!.*\s{3,})(?!.*\d)(?!.*_)(?!.*[^\w\s]).+$" 
+                           title="No leading spaces, no numbers/special chars, no triple spaces"
+                           required>
+                    <div id="user_name_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="user_email">Email Address *</label>
-                    <input type="email" id="user_email" name="user_email" class="form-control" required>
+                    <input type="email" id="user_email" name="user_email" class="form-control" 
+                           pattern="^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$" 
+                           title="Start with letter, one dot max before @, letters only domain"
+                           required>
+                    <div id="user_email_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="user_phone">Phone Number</label>
-                    <input type="tel" id="user_phone" name="user_phone" class="form-control">
+                    <input type="tel" id="user_phone" name="user_phone" class="form-control" 
+                           pattern="^(97|98)[0-9]{8}$" 
+                           title="Must start with 97 or 98 and be exactly 10 digits">
+                    <div id="user_phone_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="user_password">Password *</label>
-                    <input type="password" id="user_password" name="user_password" class="form-control" required minlength="6">
+                    <input type="password" id="user_password" name="user_password" class="form-control" 
+                           pattern="^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$" 
+                           title="Min 8 chars, upper, lower, number, special, no spaces"
+                           required minlength="8">
+                    <div id="user_password_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="user_role">Role *</label>
@@ -2020,15 +2307,26 @@ try {
                 <input type="hidden" name="rooms_json" id="hotel_rooms_json">
                 <div class="form-group">
                     <label for="hotel_name">Hotel Name *</label>
-                    <input type="text" id="hotel_name" name="hotel_name" class="form-control" required>
+                    <input type="text" id="hotel_name" name="hotel_name" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Hotel name must be 3-100 characters"
+                           required>
+                    <div id="hotel_name_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="hotel_description">Description</label>
-                    <textarea id="hotel_description" name="hotel_description" class="form-control" rows="4"></textarea>
+                    <textarea id="hotel_description" name="hotel_description" class="form-control" rows="4" 
+                              maxlength="1000"
+                              title="Description must be maximum 1000 characters"></textarea>
+                    <div id="hotel_description_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="hotel_location">Location *</label>
-                    <input type="text" id="hotel_location" name="hotel_location" class="form-control" required>
+                    <input type="text" id="hotel_location" name="hotel_location" class="form-control" 
+                           pattern="^[a-zA-Z0-9\s,\-]{3,100}$" 
+                           title="Location must be 3-100 characters (letters, numbers, spaces, commas, hyphens)"
+                           required>
+                    <div id="hotel_location_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="hotel_image">Hotel Image</label>
@@ -2055,6 +2353,49 @@ try {
         </div>
     </div>
 
+    <!-- Destination Modal -->
+    <div id="destinationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Destination</h3>
+                <span class="close" onclick="closeModal('destinationModal')">&times;</span>
+            </div>
+            <form method="POST" enctype="multipart/form-data" id="destinationForm">
+                <input type="hidden" name="add_destination" value="1">
+                <div class="form-group">
+                    <label for="destination_name">Destination Name *</label>
+                    <input type="text" id="destination_name" name="destination_name" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Destination name must be 3-100 characters"
+                           required>
+                    <div id="destination_name_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="destination_description">Description *</label>
+                    <textarea id="destination_description" name="destination_description" class="form-control" rows="4" 
+                              minlength="10" 
+                              maxlength="1000"
+                              title="Description must be 10-1000 characters"
+                              required></textarea>
+                    <div id="destination_description_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="destination_image">Destination Image</label>
+                    <input type="file" id="destination_image" name="destination_image" class="form-control" accept="image/*" onchange="previewImage(this, 'destinationPreview')">
+                    <img id="destinationPreview" class="image-preview" src="#" alt="Image Preview">
+                </div>
+                <div class="form-group">
+                    <label for="destination_status">Status</label>
+                    <select id="destination_status" name="destination_status" class="form-control" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Destination</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Activity Modal -->
     <div id="activityModal" class="modal">
         <div class="modal-content">
@@ -2062,19 +2403,30 @@ try {
                 <h3>Add Activity</h3>
                 <span class="close" onclick="closeModal('activityModal')">&times;</span>
             </div>
-            <form method="POST" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data" id="activityForm">
                 <input type="hidden" name="add_activity" value="1">
                 <div class="form-group">
                     <label for="activity_name">Activity Name *</label>
-                    <input type="text" id="activity_name" name="activity_name" class="form-control" required>
+                    <input type="text" id="activity_name" name="activity_name" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Activity name must be 3-100 characters"
+                           required>
+                    <div id="activity_name_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="activity_description">Description</label>
-                    <textarea id="activity_description" name="activity_description" class="form-control" rows="4"></textarea>
+                    <textarea id="activity_description" name="activity_description" class="form-control" rows="4" 
+                              maxlength="1000"
+                              title="Description must be maximum 1000 characters"></textarea>
+                    <div id="activity_description_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="activity_price_npr">Price (NPR) *</label>
-                    <input type="number" id="activity_price_npr" name="activity_price_npr" class="form-control" step="0.01" min="0" required>
+                    <input type="number" id="activity_price_npr" name="activity_price_npr" class="form-control" 
+                           step="0.01" min="1" max="9999999.99"
+                           title="Price must be between NPR 1 and 9,999,999.99"
+                           required>
+                    <div id="activity_price_npr_error" class="field-error"></div>
                 </div>
                 <div class="form-group">
                     <label for="activity_image">Activity Image</label>
@@ -2275,7 +2627,7 @@ try {
             });
         }, 5000);
 
-        // Form validation
+        // Form validation functions
         function validateForm(formId) {
             const form = document.getElementById(formId);
             if (!form) return true;
@@ -2284,73 +2636,234 @@ try {
             let isValid = true;
             
             requiredFields.forEach(field => {
-                if (!field.value.trim()) {
-                    showFieldError(field, 'This field is required');
+                if (!validateField(field)) {
                     isValid = false;
-                } else {
-                    clearFieldError(field);
-                    
-                    // Additional validations
-                    if (field.type === 'email' && !isValidEmail(field.value)) {
-                        showFieldError(field, 'Please enter a valid email address');
-                        isValid = false;
-                    }
-                    
-                    if (field.type === 'password' && field.value.length < 6) {
-                        showFieldError(field, 'Password must be at least 6 characters long');
-                        isValid = false;
-                    }
                 }
             });
             
             return isValid;
         }
         
+        function validateField(field) {
+            const value = field.value.trim();
+            const fieldId = field.id;
+            const errorElement = document.getElementById(fieldId + '_error');
+            
+            // Clear previous error
+            clearFieldError(field);
+            
+            // Required field check
+            if (field.hasAttribute('required') && !value) {
+                showFieldError(field, errorElement, 'This field is required');
+                return false;
+            }
+            
+            // Skip validation if field is empty and not required
+            if (!value && !field.hasAttribute('required')) {
+                return true;
+            }
+            
+            // Pattern validation
+            if (field.hasAttribute('pattern')) {
+                const pattern = new RegExp(field.getAttribute('pattern'));
+                if (!pattern.test(value)) {
+                    const title = field.getAttribute('title') || 'Invalid format';
+                    showFieldError(field, errorElement, title);
+                    return false;
+                }
+            }
+            
+            // Min/Max length validation
+            if (field.hasAttribute('minlength') && value.length < parseInt(field.getAttribute('minlength'))) {
+                showFieldError(field, errorElement, `Minimum ${field.getAttribute('minlength')} characters required`);
+                return false;
+            }
+            
+            if (field.hasAttribute('maxlength') && value.length > parseInt(field.getAttribute('maxlength'))) {
+                showFieldError(field, errorElement, `Maximum ${field.getAttribute('maxlength')} characters allowed`);
+                return false;
+            }
+            
+            // Type-specific validation
+            if (field.type === 'email' && value && !isValidEmail(value)) {
+                showFieldError(field, errorElement, 'Please enter a valid email address');
+                return false;
+            }
+            
+            if (field.type === 'number') {
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) {
+                    showFieldError(field, errorElement, 'Please enter a valid number');
+                    return false;
+                }
+                if (field.hasAttribute('min') && numValue < parseFloat(field.getAttribute('min'))) {
+                    showFieldError(field, errorElement, `Minimum value is ${field.getAttribute('min')}`);
+                    return false;
+                }
+                if (field.hasAttribute('max') && numValue > parseFloat(field.getAttribute('max'))) {
+                    showFieldError(field, errorElement, `Maximum value is ${field.getAttribute('max')}`);
+                    return false;
+                }
+            }
+            
+            // Custom validations based on field ID
+            if (fieldId === 'user_name') {
+                if (/^\s/.test(value)) {
+                    showFieldError(field, errorElement, 'Name cannot start with a space');
+                    return false;
+                }
+                if (/\s{3,}/.test(value)) {
+                    showFieldError(field, errorElement, 'Name cannot have more than two consecutive spaces');
+                    return false;
+                }
+                if (/[0-9]/.test(value)) {
+                    showFieldError(field, errorElement, 'Name cannot contain numbers');
+                    return false;
+                }
+                if (/[^\w\s]/.test(value)) {
+                    showFieldError(field, errorElement, 'Name cannot contain special characters');
+                    return false;
+                }
+            }
+            
+            if (fieldId === 'user_password' && value) {
+                if (value.length < 8) {
+                    showFieldError(field, errorElement, 'Password must be at least 8 characters');
+                    return false;
+                }
+                if (!/[A-Z]/.test(value)) {
+                    showFieldError(field, errorElement, 'Password must contain at least one uppercase letter');
+                    return false;
+                }
+                if (!/[a-z]/.test(value)) {
+                    showFieldError(field, errorElement, 'Password must contain at least one lowercase letter');
+                    return false;
+                }
+                if (!/[0-9]/.test(value)) {
+                    showFieldError(field, errorElement, 'Password must contain at least one number');
+                    return false;
+                }
+                if (!/[^\w]/.test(value)) {
+                    showFieldError(field, errorElement, 'Password must contain at least one special character');
+                    return false;
+                }
+                if (/\s/.test(value)) {
+                    showFieldError(field, errorElement, 'Password cannot contain spaces');
+                    return false;
+                }
+            }
+            
+            if (fieldId === 'user_phone' && value) {
+                if (!/^(97|98)[0-9]{8}$/.test(value)) {
+                    showFieldError(field, errorElement, 'Phone must start with 97 or 98 and be exactly 10 digits');
+                    return false;
+                }
+            }
+            
+            if (fieldId === 'user_email' && value) {
+                if (!/^[a-zA-Z]/.test(value)) {
+                    showFieldError(field, errorElement, 'Email must start with a letter');
+                    return false;
+                }
+                const localPart = value.split('@')[0];
+                if ((localPart.match(/\./g) || []).length > 1) {
+                    showFieldError(field, errorElement, 'Email can only contain one dot before @');
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+        
         function isValidEmail(email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const emailRegex = /^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$/;
             return emailRegex.test(email);
         }
         
-        function showFieldError(field, message) {
-            clearFieldError(field);
+        function showFieldError(field, errorElement, message) {
             field.style.borderColor = '#dc3545';
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'field-error';
-            errorDiv.style.color = '#dc3545';
-            errorDiv.style.fontSize = '0.8rem';
-            errorDiv.style.marginTop = '0.25rem';
-            errorDiv.textContent = message;
-            field.parentNode.appendChild(errorDiv);
+            field.classList.add('error');
+            if (errorElement) {
+                errorElement.textContent = '❌ ' + message;
+                errorElement.style.display = 'block';
+            } else {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'field-error';
+                errorDiv.id = field.id + '_error';
+                errorDiv.textContent = '❌ ' + message;
+                field.parentNode.appendChild(errorDiv);
+            }
         }
         
         function clearFieldError(field) {
             field.style.borderColor = '';
-            const existingError = field.parentNode.querySelector('.field-error');
-            if (existingError) {
-                existingError.remove();
+            field.classList.remove('error');
+            const errorElement = document.getElementById(field.id + '_error');
+            if (errorElement) {
+                errorElement.textContent = '';
+                errorElement.style.display = 'none';
             }
         }
         
-        // Add form validation to all forms
-        document.getElementById('userForm')?.addEventListener('submit', function(e) {
-            if (!validateForm('userForm')) {
-                e.preventDefault();
-            }
-        });
-        
-        // Real-time validation
-        document.querySelectorAll('input[required], textarea[required]').forEach(field => {
-            field.addEventListener('blur', function() {
-                if (this.value.trim()) {
-                    clearFieldError(this);
-                    if (this.type === 'email' && !isValidEmail(this.value)) {
-                        showFieldError(this, 'Please enter a valid email address');
-                    }
-                    if (this.type === 'password' && this.value.length < 6) {
-                        showFieldError(this, 'Password must be at least 6 characters long');
-                    }
+            // Initialize real-time validation for all forms
+        document.addEventListener('DOMContentLoaded', function() {
+            // Real-time validation on input/change
+            const forms = ['offerForm', 'itineraryForm', 'hotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm'];
+            forms.forEach(formId => {
+                const form = document.getElementById(formId);
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        if (!validateForm(formId)) {
+                            e.preventDefault();
+                            // Scroll to first error
+                            const firstError = form.querySelector('.error');
+                            if (firstError) {
+                                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }
+                    });
+                    
+                    // Add real-time validation to all inputs
+                    form.querySelectorAll('input, textarea, select').forEach(field => {
+                        field.addEventListener('input', function() {
+                            validateField(this);
+                        });
+                        
+                        field.addEventListener('blur', function() {
+                            validateField(this);
+                        });
+                    });
                 }
             });
+            
+            // Activity form validation (no ID, find by form in modal)
+            const activityForm = document.querySelector('#activityModal form');
+            if (activityForm) {
+                activityForm.addEventListener('submit', function(e) {
+                    let isValid = true;
+                    activityForm.querySelectorAll('input[required], textarea[required]').forEach(field => {
+                        if (!validateField(field)) {
+                            isValid = false;
+                        }
+                    });
+                    if (!isValid) {
+                        e.preventDefault();
+                        const firstError = activityForm.querySelector('.error');
+                        if (firstError) {
+                            firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                });
+                
+                activityForm.querySelectorAll('input, textarea').forEach(field => {
+                    field.addEventListener('input', function() {
+                        validateField(this);
+                    });
+                    field.addEventListener('blur', function() {
+                        validateField(this);
+                    });
+                });
+            }
         });
         
         // Day Management Functions
@@ -2439,7 +2952,11 @@ try {
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
                     <div>
                         <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Room Type *</label>
-                        <input type="text" class="form-control room-type" placeholder="e.g., Deluxe, Standard" required>
+                        <input type="text" class="form-control room-type" placeholder="e.g., Deluxe, Standard" 
+                               pattern="^.{2,50}$" 
+                               title="Room type must be 2-50 characters"
+                               required>
+                        <div class="field-error room-type-error-${roomBlockCounter}" style="display: none;"></div>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">AC Type *</label>
@@ -2448,10 +2965,15 @@ try {
                             <option value="AC">AC</option>
                             <option value="Non-AC">Non-AC</option>
                         </select>
+                        <div class="field-error ac-type-error-${roomBlockCounter}" style="display: none;"></div>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Price (NPR) *</label>
-                        <input type="number" class="form-control room-price" step="0.01" min="0" placeholder="0.00" required>
+                        <input type="number" class="form-control room-price" step="0.01" min="1" max="9999999.99" 
+                               placeholder="0.00" 
+                               title="Price must be between NPR 1 and 9,999,999.99"
+                               required>
+                        <div class="field-error room-price-error-${roomBlockCounter}" style="display: none;"></div>
                     </div>
                     <div>
                         <button type="button" class="btn btn-danger btn-sm" onclick="removeRoomBlock('roomBlock_${roomBlockCounter}')">Remove</button>
@@ -2459,7 +2981,88 @@ try {
                 </div>
             `;
             container.appendChild(roomBlock);
+            
+            // Add validation listeners to new room block
+            const roomTypeInput = roomBlock.querySelector('.room-type');
+            const acTypeSelect = roomBlock.querySelector('.ac-type');
+            const roomPriceInput = roomBlock.querySelector('.room-price');
+            
+            roomTypeInput.addEventListener('input', function() {
+                validateRoomField(this, 'room-type-error-' + roomBlockCounter);
+                updateHotelRoomsJson();
+            });
+            roomTypeInput.addEventListener('blur', function() {
+                validateRoomField(this, 'room-type-error-' + roomBlockCounter);
+            });
+            
+            acTypeSelect.addEventListener('change', function() {
+                validateRoomField(this, 'ac-type-error-' + roomBlockCounter);
+                updateHotelRoomsJson();
+            });
+            
+            roomPriceInput.addEventListener('input', function() {
+                validateRoomField(this, 'room-price-error-' + roomBlockCounter);
+                updateHotelRoomsJson();
+            });
+            roomPriceInput.addEventListener('blur', function() {
+                validateRoomField(this, 'room-price-error-' + roomBlockCounter);
+            });
+            
             updateHotelRoomsJson();
+        }
+        
+        function validateRoomField(field, errorId) {
+            const value = field.value.trim();
+            const errorElement = field.parentNode.querySelector('.' + errorId);
+            
+            if (field.hasAttribute('required') && !value) {
+                showRoomFieldError(field, errorElement, 'This field is required');
+                return false;
+            }
+            
+            if (!value && !field.hasAttribute('required')) {
+                clearRoomFieldError(field, errorElement);
+                return true;
+            }
+            
+            if (field.type === 'number' && value) {
+                const numValue = parseFloat(value);
+                if (isNaN(numValue) || numValue < 1) {
+                    showRoomFieldError(field, errorElement, 'Price must be at least NPR 1');
+                    return false;
+                }
+                if (numValue > 9999999.99) {
+                    showRoomFieldError(field, errorElement, 'Price cannot exceed NPR 9,999,999.99');
+                    return false;
+                }
+            }
+            
+            if (field.hasAttribute('pattern')) {
+                const pattern = new RegExp(field.getAttribute('pattern'));
+                if (!pattern.test(value)) {
+                    showRoomFieldError(field, errorElement, field.getAttribute('title') || 'Invalid format');
+                    return false;
+                }
+            }
+            
+            clearRoomFieldError(field, errorElement);
+            return true;
+        }
+        
+        function showRoomFieldError(field, errorElement, message) {
+            field.style.borderColor = '#dc3545';
+            if (errorElement) {
+                errorElement.textContent = '❌ ' + message;
+                errorElement.style.display = 'block';
+            }
+        }
+        
+        function clearRoomFieldError(field, errorElement) {
+            field.style.borderColor = '';
+            if (errorElement) {
+                errorElement.textContent = '';
+                errorElement.style.display = 'none';
+            }
         }
         
         function removeRoomBlock(blockId) {
@@ -2524,11 +3127,18 @@ try {
                     <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 1rem; align-items: start;">
                         <div>
                             <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Day # *</label>
-                            <input type="number" class="form-control day-number" min="1" placeholder="1" required>
+                            <input type="number" class="form-control day-number" min="1" max="365" placeholder="1" 
+                                   title="Day number must be between 1 and 365"
+                                   required>
+                            <div class="field-error day-number-error-${dayBlockCounter}" style="display: none; font-size: 0.75rem;"></div>
                         </div>
                         <div>
                             <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Day Title *</label>
-                            <input type="text" class="form-control day-title" placeholder="e.g., Arrival Day" required>
+                            <input type="text" class="form-control day-title" placeholder="e.g., Arrival Day" 
+                                   pattern="^.{3,100}$" 
+                                   title="Day title must be 3-100 characters"
+                                   required>
+                            <div class="field-error day-title-error-${dayBlockCounter}" style="display: none; font-size: 0.75rem;"></div>
                         </div>
                         <div>
                             <button type="button" class="btn btn-danger btn-sm" onclick="removeDayBlock('dayBlock_${dayBlockCounter}')">Remove</button>
@@ -2555,7 +3165,78 @@ try {
                 </div>
             `;
             container.appendChild(dayBlock);
+            
+            // Add validation listeners to new day block
+            const dayNumberInput = dayBlock.querySelector('.day-number');
+            const dayTitleInput = dayBlock.querySelector('.day-title');
+            
+            dayNumberInput.addEventListener('input', function() {
+                validateDayField(this, 'day-number-error-' + dayBlockCounter);
+                updateItineraryDaysJson();
+            });
+            dayNumberInput.addEventListener('blur', function() {
+                validateDayField(this, 'day-number-error-' + dayBlockCounter);
+            });
+            
+            dayTitleInput.addEventListener('input', function() {
+                validateDayField(this, 'day-title-error-' + dayBlockCounter);
+                updateItineraryDaysJson();
+            });
+            dayTitleInput.addEventListener('blur', function() {
+                validateDayField(this, 'day-title-error-' + dayBlockCounter);
+            });
+            
             updateItineraryDaysJson();
+        }
+        
+        function validateDayField(field, errorId) {
+            const value = field.value.trim();
+            const errorElement = field.parentNode.querySelector('.' + errorId);
+            
+            if (field.hasAttribute('required') && !value) {
+                showDayFieldError(field, errorElement, 'This field is required');
+                return false;
+            }
+            
+            if (!value && !field.hasAttribute('required')) {
+                clearDayFieldError(field, errorElement);
+                return true;
+            }
+            
+            if (field.type === 'number' && value) {
+                const numValue = parseInt(value);
+                if (isNaN(numValue) || numValue < 1 || numValue > 365) {
+                    showDayFieldError(field, errorElement, 'Day number must be between 1 and 365');
+                    return false;
+                }
+            }
+            
+            if (field.hasAttribute('pattern')) {
+                const pattern = new RegExp(field.getAttribute('pattern'));
+                if (!pattern.test(value)) {
+                    showDayFieldError(field, errorElement, field.getAttribute('title') || 'Invalid format');
+                    return false;
+                }
+            }
+            
+            clearDayFieldError(field, errorElement);
+            return true;
+        }
+        
+        function showDayFieldError(field, errorElement, message) {
+            field.style.borderColor = '#dc3545';
+            if (errorElement) {
+                errorElement.textContent = '❌ ' + message;
+                errorElement.style.display = 'block';
+            }
+        }
+        
+        function clearDayFieldError(field, errorElement) {
+            field.style.borderColor = '';
+            if (errorElement) {
+                errorElement.textContent = '';
+                errorElement.style.display = 'none';
+            }
         }
         
         function removeDayBlock(blockId) {
@@ -2609,7 +3290,250 @@ try {
                     updateItineraryDaysJson();
                 });
             }
+            
+            // Initialize all charts
+            initializeAllCharts();
         });
+        
+        // Initialize all dashboard charts
+        function initializeAllCharts() {
+            // Bookings Type Comparison Chart
+            const bookingsTypeCtx = document.getElementById('bookingsTypeChart');
+            if (bookingsTypeCtx) {
+                new Chart(bookingsTypeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Hotel Bookings', 'Activity Bookings'],
+                        datasets: [{
+                            data: [<?php echo $hotel_bookings_count; ?>, <?php echo $activity_bookings_count; ?>],
+                            backgroundColor: ['rgba(111, 126, 203, 0.8)', 'rgba(255, 87, 34, 0.8)'],
+                            borderColor: ['rgba(111, 126, 203, 1)', 'rgba(255, 87, 34, 1)'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.parsed + ' booking(s)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Booking Status Breakdown Chart
+            const bookingStatusCtx = document.getElementById('bookingStatusChart');
+            if (bookingStatusCtx) {
+                new Chart(bookingStatusCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Pending', 'Approved', 'Rejected'],
+                        datasets: [{
+                            data: [
+                                <?php echo $booking_status_stats['pending']; ?>,
+                                <?php echo $booking_status_stats['approved']; ?>,
+                                <?php echo $booking_status_stats['rejected']; ?>
+                            ],
+                            backgroundColor: [
+                                'rgba(255, 193, 7, 0.8)',
+                                'rgba(40, 167, 69, 0.8)',
+                                'rgba(220, 53, 69, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(255, 193, 7, 1)',
+                                'rgba(40, 167, 69, 1)',
+                                'rgba(220, 53, 69, 1)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.parsed + ' booking(s)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Monthly Bookings Trend Chart
+            const monthlyBookingsCtx = document.getElementById('monthlyBookingsChart');
+            if (monthlyBookingsCtx) {
+                const monthlyBookingsData = <?php echo json_encode($monthly_bookings); ?>;
+                new Chart(monthlyBookingsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: monthlyBookingsData.map(item => item.month),
+                        datasets: [
+                            {
+                                label: 'Hotel Bookings',
+                                data: monthlyBookingsData.map(item => item.hotel),
+                                borderColor: 'rgba(111, 126, 203, 1)',
+                                backgroundColor: 'rgba(111, 126, 203, 0.2)',
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: 'Activity Bookings',
+                                data: monthlyBookingsData.map(item => item.activity),
+                                borderColor: 'rgba(255, 87, 34, 1)',
+                                backgroundColor: 'rgba(255, 87, 34, 0.2)',
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: 'Total Bookings',
+                                data: monthlyBookingsData.map(item => item.total),
+                                borderColor: 'rgba(3, 24, 129, 1)',
+                                backgroundColor: 'rgba(3, 24, 129, 0.2)',
+                                tension: 0.4,
+                                fill: true,
+                                borderWidth: 3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Monthly Orders Trend Chart
+            const monthlyOrdersCtx = document.getElementById('monthlyOrdersChart');
+            if (monthlyOrdersCtx) {
+                const monthlyOrdersData = <?php echo json_encode($monthly_orders); ?>;
+                new Chart(monthlyOrdersCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyOrdersData.map(item => item.month),
+                        datasets: [
+                            {
+                                label: 'Number of Orders',
+                                data: monthlyOrdersData.map(item => item.count),
+                                backgroundColor: 'rgba(3, 24, 129, 0.8)',
+                                borderColor: 'rgba(3, 24, 129, 1)',
+                                borderWidth: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Orders: ' + context.parsed.y;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Revenue Breakdown Chart
+            const revenueCtx = document.getElementById('revenueChart');
+            if (revenueCtx) {
+                new Chart(revenueCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Orders', 'Hotel Bookings', 'Activity Bookings'],
+                        datasets: [{
+                            label: 'Revenue (NPR)',
+                            data: [
+                                <?php echo $total_revenue_orders; ?>,
+                                <?php echo $total_revenue_hotel; ?>,
+                                <?php echo $total_revenue_activity; ?>
+                            ],
+                            backgroundColor: [
+                                'rgba(3, 24, 129, 0.8)',
+                                'rgba(111, 126, 203, 0.8)',
+                                'rgba(255, 87, 34, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(3, 24, 129, 1)',
+                                'rgba(111, 126, 203, 1)',
+                                'rgba(255, 87, 34, 1)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Revenue: NPR ' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'NPR ' + value.toLocaleString('en-IN');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
     </script>
 </body>
 </html>
