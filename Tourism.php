@@ -95,6 +95,88 @@ session_start();
     </div>
 </section>
 
+    <!-- Hotels Section -->
+    <section id="hotels">
+        <h2 class="section-title">Our Hotels</h2>
+        <p class="section-subtitle">Find the perfect accommodation for your stay. Comfortable rooms with modern amenities.</p>
+        
+        <div class="offers-container">
+            <?php
+            try {
+                $hotels = $pdo->query("SELECT * FROM hotels WHERE status = 'active' LIMIT 3")->fetchAll();
+            } catch (PDOException $e) {
+                $hotels = [];
+            }
+            
+            if (empty($hotels)):
+            ?>
+                <p style="text-align: center; padding: 2rem; color: #666;">No hotels available at this time.</p>
+            <?php else: ?>
+                <?php foreach($hotels as $hotel): ?>
+                <div class="offer-card">
+                    <img src="<?php echo $hotel['image_path'] ?: 'img/default-offer.jpg'; ?>" alt="<?php echo htmlspecialchars($hotel['name']); ?>" class="offer-img">
+                    <h3><?php echo htmlspecialchars($hotel['name']); ?></h3>
+                    <p><?php echo htmlspecialchars($hotel['location'] ?? 'Location not specified'); ?></p>
+                    <?php if (!empty($hotel['description'])): ?>
+                        <p style="color: #666; font-size: 0.9rem;"><?php echo htmlspecialchars(substr($hotel['description'], 0, 100)) . '...'; ?></p>
+                    <?php endif; ?>
+                    <a href="hotels.php?id=<?php echo $hotel['id']; ?>">
+                        <button class="offer-button">View Details</button>
+                    </a>
+                </div>
+                <?php endforeach; ?>
+                <div class="offer-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; border: 2px dashed #031881;">
+                    <i class="fas fa-hotel" style="font-size: 3rem; color: #031881; margin-bottom: 1rem;"></i>
+                    <h3>View All Hotels</h3>
+                    <a href="hotels.php">
+                        <button class="offer-button">Explore More</button>
+                    </a>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <!-- Activities Section -->
+    <section id="activities">
+        <h2 class="section-title">Activities & Adventures</h2>
+        <p class="section-subtitle">Explore exciting activities and adventures. Make your trip unforgettable with our curated experiences.</p>
+        
+        <div class="offers-container">
+            <?php
+            try {
+                $activities = $pdo->query("SELECT * FROM activities WHERE status = 'active' LIMIT 3")->fetchAll();
+            } catch (PDOException $e) {
+                $activities = [];
+            }
+            
+            if (empty($activities)):
+            ?>
+                <p style="text-align: center; padding: 2rem; color: #666;">No activities available at this time.</p>
+            <?php else: ?>
+                <?php foreach($activities as $activity): ?>
+                <div class="offer-card">
+                    <img src="<?php echo $activity['image_path'] ?: 'img/default-offer.jpg'; ?>" alt="<?php echo htmlspecialchars($activity['name']); ?>" class="offer-img">
+                    <h3><?php echo htmlspecialchars($activity['name']); ?></h3>
+                    <?php if (!empty($activity['description'])): ?>
+                        <p><?php echo htmlspecialchars(substr($activity['description'], 0, 100)) . '...'; ?></p>
+                    <?php endif; ?>
+                    <p style="font-size: 1.2rem; font-weight: 700; color: #031881; margin: 0.5rem 0;">NPR <?php echo number_format($activity['price_npr'], 2); ?></p>
+                    <a href="activities.php">
+                        <button class="offer-button">Book Now</button>
+                    </a>
+                </div>
+                <?php endforeach; ?>
+                <div class="offer-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; border: 2px dashed #031881;">
+                    <i class="fas fa-hiking" style="font-size: 3rem; color: #031881; margin-bottom: 1rem;"></i>
+                    <h3>View All Activities</h3>
+                    <a href="activities.php">
+                        <button class="offer-button">Explore More</button>
+                    </a>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
     <!-- Itinerary Section -->
 <section id="itenary">
     <h2 class="section-title">Popular Itineraries</h2>

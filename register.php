@@ -150,7 +150,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="form-group">
                     <label for="name">Name:</label>
                     <input type="text" id="name" name="name" class="input-field" 
-                           value="<?php echo htmlspecialchars($name ?? ''); ?>" required>
+                           value="<?php echo htmlspecialchars($name ?? ''); ?>" required
+                           pattern="^(?!\s)(?!.*\s{3,})(?!.*\d)(?!.*_)(?!.*[^\w\s]).+$"
+                           title="No leading spaces, no numbers/special chars, no triple spaces">
                     <div id="nameError" class="error-msg">
                         <?php echo $errors['name'] ?? ''; ?>
                     </div>
@@ -170,7 +172,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="form-group">
                     <label for="address">Address:</label>
                     <input type="text" id="address" name="address" class="input-field" 
-                           value="<?php echo htmlspecialchars($address ?? ''); ?>" required>
+                           value="<?php echo htmlspecialchars($address ?? ''); ?>" required
+                           pattern="^[a-zA-Z0-9\s,\-]+$"
+                           title="Letters, numbers, spaces, commas and hyphens only">
                     <div id="addressError" class="error-msg">
                         <?php echo $errors['address'] ?? ''; ?>
                     </div>
@@ -179,7 +183,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="form-group">
                     <label for="phone">Phone:</label>
                     <input type="tel" id="phone" name="phone" class="input-field" 
-                           value="<?php echo htmlspecialchars($phone ?? ''); ?>" required>
+                           value="<?php echo htmlspecialchars($phone ?? ''); ?>" required
+                           pattern="^(97|98)[0-9]{8}$"
+                           title="Must start with 97 or 98 and be exactly 10 digits">
                     <div id="phoneError" class="error-msg">
                         <?php echo $errors['phone'] ?? ''; ?>
                     </div>
@@ -190,7 +196,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="form-group">
                     <label for="email">Email:</label>
                     <input type="email" id="email" name="email" class="input-field" 
-                           value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
+                           value="<?php echo htmlspecialchars($email ?? ''); ?>" required
+                           pattern="^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$"
+                           title="Start with letter, one dot max before @, letters only domain">
                     <div id="emailError" class="error-msg">
                         <?php echo $errors['email'] ?? ''; ?>
                     </div>
@@ -200,7 +208,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="form-row">
                 <div class="form-group">
                     <label for="password">Password:</label>
-                    <input type="password" id="password" name="password" class="input-field" required>
+                    <input type="password" id="password" name="password" class="input-field" required
+                           pattern="^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$"
+                           title="Min 8 chars, upper, lower, number, special, no spaces">
                     <div id="passwordError" class="error-msg">
                         <?php echo $errors['password'] ?? ''; ?>
                     </div>
@@ -208,7 +218,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 <div class="form-group">
                     <label for="confirm_password">Confirm Password:</label>
-                    <input type="password" id="confirm_password" name="confirm_password" class="input-field" required>
+                    <input type="password" id="confirm_password" name="confirm_password" class="input-field" required
+                           pattern="^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$"
+                           title="Must match password and follow password rules">
                     <div id="confirmPasswordError" class="error-msg">
                         <?php echo $errors['confirm_password'] ?? ''; ?>
                     </div>
@@ -224,6 +236,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // ✅ Real-time inline validation
         document.getElementById("name").addEventListener("input", function() {
             const nameError = document.getElementById("nameError");
+            if (this.value.trim() === "") {
+                nameError.innerText = "❌ Name is required.";
+                return;
+            }
             
             // Check if starts with space
             if (/^\s/.test(this.value)) {
@@ -275,6 +291,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         document.getElementById("address").addEventListener("input", function() {
             const addressError = document.getElementById("addressError");
+            if (this.value.trim() === "") {
+                addressError.innerText = "❌ Address is required.";
+                return;
+            }
             
             // Check for valid characters (letters, numbers, spaces, commas, hyphens)
             if (!/^[a-zA-Z0-9\s,\-]+$/.test(this.value)) {
@@ -290,6 +310,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             // Remove any non-digit characters
             this.value = this.value.replace(/\D/g, '');
+
+            if (this.value === "") {
+                phoneError.innerText = "❌ Phone number is required.";
+                return;
+            }
             
             // Check if starts with 97 or 98 and is exactly 10 digits
             if (!/^(97|98)[0-9]{8}$/.test(this.value)) {
@@ -302,6 +327,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         document.getElementById("email").addEventListener("input", function() {
             const emailError = document.getElementById("emailError");
+            if (this.value.trim() === "") {
+                emailError.innerText = "❌ Email is required.";
+                return;
+            }
             
             // Check if starts with letter
             if (!/^[a-zA-Z]/.test(this.value)) {
@@ -348,6 +377,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Reset errors
             errorElement.innerText = "";
             confirmErrorElement.innerText = "";
+
+            // Required checks
+            if (password.length === 0) {
+                errorElement.innerText = "❌ Password is required.";
+                return;
+            }
+            if (confirmPass.length === 0) {
+                confirmErrorElement.innerText = "❌ Confirm Password is required.";
+            }
             
             // Check length
             if (password.length < 8) {

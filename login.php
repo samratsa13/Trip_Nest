@@ -18,8 +18,13 @@ $login_error = "";
 $email_error = "";
 $password_error = "";
 
+// Reusable validation patterns
+$EMAIL_PATTERN = '/^[^\s@]+@[^\s@]+\.[^\s@]+$/';
+$PASSWORD_PATTERN = '/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$/';
+
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Normalized inputs
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     
@@ -30,14 +35,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (empty($email)) {
         $email_error = "Email is required.";
         $valid = false;
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    } elseif (!preg_match($EMAIL_PATTERN, $email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $email_error = "Please enter a valid email address.";
         $valid = false;
     }
     
-    // Password validation
+    // Password validation (min 8, upper, lower, number, special, no spaces)
     if (empty($password)) {
         $password_error = "Password is required.";
+        $valid = false;
+    } elseif (!preg_match($PASSWORD_PATTERN, $password)) {
+        $password_error = "Password must be 8+ chars with upper, lower, number, and special character.";
         $valid = false;
     }
     
@@ -271,7 +279,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="form-group">
                 <label for="email">Email:</label>
                 <input type="email" id="email" name="email" class="input-field" 
-                       value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
+                       value="<?php echo htmlspecialchars($email ?? ''); ?>" required
+                       pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
+                       title="Enter a valid email like user@example.com">
                 <div id="emailError" class="error-msg">
                     <?php echo $email_error ?? ''; ?>
                 </div>
@@ -280,7 +290,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="form-group">
                 <label for="password">Password:</label>
                 <div class="password-container">
-                    <input type="password" id="password" name="password" class="input-field" required>
+                    <input type="password" id="password" name="password" class="input-field" required
+                           pattern="^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$"
+                           title="Min 8 chars, upper, lower, number, special, no spaces">
                     <button type="button" class="toggle-password" id="togglePassword">👁️</button>
                 </div>
                 <div id="passwordError" class="error-msg">
@@ -315,8 +327,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         document.getElementById("password").addEventListener("input", function() {
             const passwordError = document.getElementById("passwordError");
             
+            const passwordPattern = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$/;
             if (this.value === "") {
                 passwordError.innerText = "❌ Password is required.";
+                return;
+            }
+            if (!passwordPattern.test(this.value)) {
+                passwordError.innerText = "❌ Min 8 chars, upper, lower, number & special, no spaces.";
                 return;
             }
             

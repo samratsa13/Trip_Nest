@@ -11,7 +11,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
 require_once 'db_connection.php';
 
 // Create upload directories if they don't exist
-$upload_dirs = ['uploads/offers/', 'uploads/itineraries/', 'uploads/destinations/'];
+$upload_dirs = ['uploads/offers/', 'uploads/itineraries/', 'uploads/destinations/', 'uploads/hotels/', 'uploads/activities/'];
 foreach ($upload_dirs as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
@@ -143,6 +143,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         $stmt = $pdo->prepare("INSERT INTO popular_itineraries (title, description, image_path, additional_images, status) VALUES (?, ?, ?, ?, ?)");
         if ($stmt->execute([$title, $description, $image_path, $additional_images_json, $status])) {
+            $itinerary_id = $pdo->lastInsertId();
+            // Handle inline day-wise itinerary creation
+            if (!empty($_POST['itinerary_days_json'])) {
+                $days = json_decode($_POST['itinerary_days_json'], true);
+                if (is_array($days)) {
+                    $day_stmt = $pdo->prepare("INSERT INTO itinerary_days (itinerary_id, day_number, day_title, day_description, activities, accommodation, meals) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE day_title = VALUES(day_title), day_description = VALUES(day_description), activities = VALUES(activities), accommodation = VALUES(accommodation), meals = VALUES(meals)");
+                    foreach ($days as $day) {
+                        $day_number = intval($day['day_number'] ?? 0);
+                        $day_title = trim($day['day_title'] ?? '');
+                        if ($day_number > 0 && $day_title !== '') {
+                            $day_stmt->execute([
+                                $itinerary_id,
+                                $day_number,
+                                $day_title,
+                                $day['day_description'] ?? '',
+                                $day['activities'] ?? '',
+                                $day['accommodation'] ?? '',
+                                $day['meals'] ?? ''
+                            ]);
+                        }
+                    }
+                }
+            }
             $itinerary_success = "Popular itinerary added successfully!";
         } else {
             $itinerary_error = "Error adding popular itinerary!";
@@ -311,6 +334,239 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
+    // Create hotels, rooms, activities, and bookings tables
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS hotels (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            location VARCHAR(255),
+            image_path VARCHAR(255),
+            status VARCHAR(50) DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        $pdo->exec("CREATE TABLE IF NOT EXISTS hotel_rooms (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            hotel_id INT NOT NULL,
+            room_type VARCHAR(100) NOT NULL,
+            ac_type VARCHAR(50) NOT NULL,
+            price_npr DECIMAL(10, 2) NOT NULL,
+            available INT DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
+            INDEX idx_hotel_id (hotel_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        $pdo->exec("CREATE TABLE IF NOT EXISTS activities (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            image_path VARCHAR(255),
+            price_npr DECIMAL(10, 2) NOT NULL,
+            status VARCHAR(50) DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        $pdo->exec("CREATE TABLE IF NOT EXISTS hotel_bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            hotel_id INT NOT NULL,
+            room_id INT NOT NULL,
+            check_in DATE NOT NULL,
+            check_out DATE NOT NULL,
+            guest_name VARCHAR(255) NOT NULL,
+            guest_email VARCHAR(255) NOT NULL,
+            guest_phone VARCHAR(50) NOT NULL,
+            total_price_npr DECIMAL(10, 2) NOT NULL,
+            status VARCHAR(50) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+            FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
+            FOREIGN KEY (room_id) REFERENCES hotel_rooms(id) ON DELETE CASCADE,
+            INDEX idx_user_id (user_id),
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        $pdo->exec("CREATE TABLE IF NOT EXISTS activity_bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            activity_id INT NOT NULL,
+            booking_date DATE NOT NULL,
+            guest_name VARCHAR(255) NOT NULL,
+            guest_email VARCHAR(255) NOT NULL,
+            guest_phone VARCHAR(50) NOT NULL,
+            total_price_npr DECIMAL(10, 2) NOT NULL,
+            status VARCHAR(50) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+            FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE,
+            INDEX idx_user_id (user_id),
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (PDOException $e) {
+        // Tables might already exist
+    }
+    
+    // Add Hotel
+    if (isset($_POST['add_hotel'])) {
+        $name = $_POST['hotel_name'];
+        $description = $_POST['hotel_description'];
+        $location = $_POST['hotel_location'];
+        $status = $_POST['hotel_status'];
+        
+        $image_path = '';
+        if (isset($_FILES['hotel_image']) && $_FILES['hotel_image']['error'] == 0) {
+            $target_dir = "uploads/hotels/";
+            if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+            $image_extension = pathinfo($_FILES['hotel_image']['name'], PATHINFO_EXTENSION);
+            $image_name = 'hotel_' . time() . '.' . $image_extension;
+            $target_file = $target_dir . $image_name;
+            
+            if (move_uploaded_file($_FILES['hotel_image']['tmp_name'], $target_file)) {
+                $image_path = $target_file;
+            }
+        }
+        
+        $stmt = $pdo->prepare("INSERT INTO hotels (name, description, location, image_path, status) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt->execute([$name, $description, $location, $image_path, $status])) {
+            $hotel_id = $pdo->lastInsertId();
+            $hotel_success = "Hotel added successfully!";
+            
+            // Add rooms if provided
+            if (!empty($_POST['rooms_json'])) {
+                $rooms = json_decode($_POST['rooms_json'], true);
+                if (is_array($rooms)) {
+                    $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, available) VALUES (?, ?, ?, ?, ?)");
+                    foreach ($rooms as $room) {
+                        if (!empty($room['room_type']) && !empty($room['ac_type']) && !empty($room['price_npr'])) {
+                            $room_stmt->execute([
+                                $hotel_id,
+                                $room['room_type'],
+                                $room['ac_type'],
+                                $room['price_npr'],
+                                $room['available'] ?? 1
+                            ]);
+                        }
+                    }
+                }
+            }
+        } else {
+            $hotel_error = "Error adding hotel!";
+        }
+    }
+    
+    // Delete Hotel
+    if (isset($_POST['delete_hotel'])) {
+        $hotel_id = $_POST['hotel_id'];
+        
+        $stmt = $pdo->prepare("SELECT image_path FROM hotels WHERE id = ?");
+        $stmt->execute([$hotel_id]);
+        $hotel = $stmt->fetch();
+        
+        if ($hotel && !empty($hotel['image_path']) && file_exists($hotel['image_path'])) {
+            unlink($hotel['image_path']);
+        }
+        
+        $stmt = $pdo->prepare("DELETE FROM hotels WHERE id = ?");
+        if ($stmt->execute([$hotel_id])) {
+            $hotel_success = "Hotel deleted successfully!";
+        } else {
+            $hotel_error = "Error deleting hotel!";
+        }
+    }
+    
+    // Update Hotel Status
+    if (isset($_POST['update_hotel_status'])) {
+        $hotel_id = $_POST['hotel_id'];
+        $status = $_POST['hotel_status'];
+        
+        $stmt = $pdo->prepare("UPDATE hotels SET status = ? WHERE id = ?");
+        if ($stmt->execute([$status, $hotel_id])) {
+            $hotel_success = "Hotel status updated successfully!";
+        } else {
+            $hotel_error = "Error updating hotel status!";
+        }
+    }
+    
+    // Add Activity
+    if (isset($_POST['add_activity'])) {
+        $name = $_POST['activity_name'];
+        $description = $_POST['activity_description'];
+        $price_npr = $_POST['activity_price_npr'];
+        $status = $_POST['activity_status'];
+        
+        $image_path = '';
+        if (isset($_FILES['activity_image']) && $_FILES['activity_image']['error'] == 0) {
+            $target_dir = "uploads/activities/";
+            if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+            $image_extension = pathinfo($_FILES['activity_image']['name'], PATHINFO_EXTENSION);
+            $image_name = 'activity_' . time() . '.' . $image_extension;
+            $target_file = $target_dir . $image_name;
+            
+            if (move_uploaded_file($_FILES['activity_image']['tmp_name'], $target_file)) {
+                $image_path = $target_file;
+            }
+        }
+        
+        $stmt = $pdo->prepare("INSERT INTO activities (name, description, image_path, price_npr, status) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt->execute([$name, $description, $image_path, $price_npr, $status])) {
+            $activity_success = "Activity added successfully!";
+        } else {
+            $activity_error = "Error adding activity!";
+        }
+    }
+    
+    // Delete Activity
+    if (isset($_POST['delete_activity'])) {
+        $activity_id = $_POST['activity_id'];
+        
+        $stmt = $pdo->prepare("SELECT image_path FROM activities WHERE id = ?");
+        $stmt->execute([$activity_id]);
+        $activity = $stmt->fetch();
+        
+        if ($activity && !empty($activity['image_path']) && file_exists($activity['image_path'])) {
+            unlink($activity['image_path']);
+        }
+        
+        $stmt = $pdo->prepare("DELETE FROM activities WHERE id = ?");
+        if ($stmt->execute([$activity_id])) {
+            $activity_success = "Activity deleted successfully!";
+        } else {
+            $activity_error = "Error deleting activity!";
+        }
+    }
+    
+    // Update Activity Status
+    if (isset($_POST['update_activity_status'])) {
+        $activity_id = $_POST['activity_id'];
+        $status = $_POST['activity_status'];
+        
+        $stmt = $pdo->prepare("UPDATE activities SET status = ? WHERE id = ?");
+        if ($stmt->execute([$status, $activity_id])) {
+            $activity_success = "Activity status updated successfully!";
+        } else {
+            $activity_error = "Error updating activity status!";
+        }
+    }
+    
+    // Update Booking Status (Hotel or Activity)
+    if (isset($_POST['update_booking_status'])) {
+        $booking_id = $_POST['booking_id'];
+        $booking_type = $_POST['booking_type'];
+        $status = $_POST['booking_status'];
+        
+        $table = $booking_type === 'hotel' ? 'hotel_bookings' : 'activity_bookings';
+        $stmt = $pdo->prepare("UPDATE $table SET status = ? WHERE id = ?");
+        if ($stmt->execute([$status, $booking_id])) {
+            $booking_success = "Booking status updated successfully!";
+        } else {
+            $booking_error = "Error updating booking status!";
+        }
+    }
+    
     // Add User
     if (isset($_POST['add_user'])) {
         $name = $_POST['user_name'];
@@ -379,6 +635,40 @@ $recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN
 // Get all users and orders for their respective tabs
 $all_users = $pdo->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll();
 $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN users u ON o.user_id = u.user_id ORDER BY o.created_at DESC")->fetchAll();
+
+// Get hotels, activities, and bookings
+try {
+    $hotels = $pdo->query("SELECT * FROM hotels ORDER BY created_at DESC")->fetchAll();
+} catch (PDOException $e) {
+    $hotels = [];
+}
+
+try {
+    $activities = $pdo->query("SELECT * FROM activities ORDER BY created_at DESC")->fetchAll();
+} catch (PDOException $e) {
+    $activities = [];
+}
+
+try {
+    $hotel_bookings = $pdo->query("SELECT hb.*, u.name as user_name, h.name as hotel_name, hr.room_type, hr.ac_type 
+        FROM hotel_bookings hb 
+        JOIN users u ON hb.user_id = u.user_id 
+        JOIN hotels h ON hb.hotel_id = h.id 
+        JOIN hotel_rooms hr ON hb.room_id = hr.id 
+        ORDER BY hb.created_at DESC")->fetchAll();
+} catch (PDOException $e) {
+    $hotel_bookings = [];
+}
+
+try {
+    $activity_bookings = $pdo->query("SELECT ab.*, u.name as user_name, a.name as activity_name 
+        FROM activity_bookings ab 
+        JOIN users u ON ab.user_id = u.user_id 
+        JOIN activities a ON ab.activity_id = a.id 
+        ORDER BY ab.created_at DESC")->fetchAll();
+} catch (PDOException $e) {
+    $activity_bookings = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -816,6 +1106,9 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                 <li><a href="#" data-tab="offers"><i class="fas fa-gift"></i> <span>Special Offers</span></a></li>
                 <li><a href="#" data-tab="itineraries"><i class="fas fa-route"></i> <span>Popular Itineraries</span></a></li>
                 <li><a href="#" data-tab="destinations"><i class="fas fa-map-marker-alt"></i> <span>Destinations</span></a></li>
+                <li><a href="#" data-tab="hotels"><i class="fas fa-hotel"></i> <span>Hotels</span></a></li>
+                <li><a href="#" data-tab="activities"><i class="fas fa-hiking"></i> <span>Activities</span></a></li>
+                <li><a href="#" data-tab="bookings"><i class="fas fa-calendar-check"></i> <span>Bookings</span></a></li>
                 <li><a href="Tourism.php"><i class="fas fa-home"></i> <span>Back to Site</span></a></li>
                 <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
             </ul>
@@ -1254,6 +1547,295 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                 </table>
             </div>
         </div>
+
+        <!-- Hotels Tab -->
+        <div id="hotels" class="tab-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Hotels</h3>
+                    <button class="btn btn-primary" onclick="openModal('hotel')">Add Hotel</button>
+                </div>
+                
+                <?php if (isset($hotel_success)): ?>
+                    <div class="alert alert-success"><?php echo $hotel_success; ?></div>
+                <?php endif; ?>
+                
+                <?php if (isset($hotel_error)): ?>
+                    <div class="alert alert-error"><?php echo $hotel_error; ?></div>
+                <?php endif; ?>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Location</th>
+                            <th>Image</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($hotels)): ?>
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 2rem;">No hotels added yet.</td>
+                        </tr>
+                        <?php else: ?>
+                        <?php foreach($hotels as $hotel): ?>
+                        <tr>
+                            <td><?php echo $hotel['id']; ?></td>
+                            <td><?php echo htmlspecialchars($hotel['name']); ?></td>
+                            <td><?php echo htmlspecialchars($hotel['location'] ?? 'N/A'); ?></td>
+                            <td>
+                                <?php if (!empty($hotel['image_path'])): ?>
+                                    <img src="<?php echo $hotel['image_path']; ?>" alt="Hotel Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
+                                <?php else: ?>
+                                    No Image
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="status-badge status-<?php echo $hotel['status']; ?>">
+                                    <?php echo ucfirst($hotel['status']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
+                                        <select name="hotel_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
+                                            <option value="active" <?php echo $hotel['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                            <option value="inactive" <?php echo $hotel['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                        </select>
+                                        <input type="hidden" name="update_hotel_status" value="1">
+                                    </form>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
+                                        <button type="submit" name="delete_hotel" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this hotel?')">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Activities Tab -->
+        <div id="activities" class="tab-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Activities</h3>
+                    <button class="btn btn-primary" onclick="openModal('activity')">Add Activity</button>
+                </div>
+                
+                <?php if (isset($activity_success)): ?>
+                    <div class="alert alert-success"><?php echo $activity_success; ?></div>
+                <?php endif; ?>
+                
+                <?php if (isset($activity_error)): ?>
+                    <div class="alert alert-error"><?php echo $activity_error; ?></div>
+                <?php endif; ?>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Price (NPR)</th>
+                            <th>Image</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($activities)): ?>
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem;">No activities added yet.</td>
+                        </tr>
+                        <?php else: ?>
+                        <?php foreach($activities as $activity): ?>
+                        <tr>
+                            <td><?php echo $activity['id']; ?></td>
+                            <td><?php echo htmlspecialchars($activity['name']); ?></td>
+                            <td><?php echo htmlspecialchars(substr($activity['description'] ?? '', 0, 100)) . '...'; ?></td>
+                            <td>NPR <?php echo number_format($activity['price_npr'], 2); ?></td>
+                            <td>
+                                <?php if (!empty($activity['image_path'])): ?>
+                                    <img src="<?php echo $activity['image_path']; ?>" alt="Activity Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
+                                <?php else: ?>
+                                    No Image
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="status-badge status-<?php echo $activity['status']; ?>">
+                                    <?php echo ucfirst($activity['status']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
+                                        <select name="activity_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
+                                            <option value="active" <?php echo $activity['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                            <option value="inactive" <?php echo $activity['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                        </select>
+                                        <input type="hidden" name="update_activity_status" value="1">
+                                    </form>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
+                                        <button type="submit" name="delete_activity" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this activity?')">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Bookings Tab -->
+        <div id="bookings" class="tab-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Bookings</h3>
+                </div>
+                
+                <?php if (isset($booking_success)): ?>
+                    <div class="alert alert-success"><?php echo $booking_success; ?></div>
+                <?php endif; ?>
+                
+                <?php if (isset($booking_error)): ?>
+                    <div class="alert alert-error"><?php echo $booking_error; ?></div>
+                <?php endif; ?>
+                
+                <h4 style="margin-top: 2rem; margin-bottom: 1rem;">Hotel Bookings</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Hotel</th>
+                            <th>Room</th>
+                            <th>Check-in</th>
+                            <th>Check-out</th>
+                            <th>Guest Info</th>
+                            <th>Total (NPR)</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($hotel_bookings)): ?>
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 2rem;">No hotel bookings yet.</td>
+                        </tr>
+                        <?php else: ?>
+                        <?php foreach($hotel_bookings as $booking): ?>
+                        <tr>
+                            <td><?php echo $booking['id']; ?></td>
+                            <td><?php echo htmlspecialchars($booking['user_name']); ?></td>
+                            <td><?php echo htmlspecialchars($booking['hotel_name']); ?></td>
+                            <td><?php echo htmlspecialchars($booking['room_type'] . ' (' . $booking['ac_type'] . ')'); ?></td>
+                            <td><?php echo date('M j, Y', strtotime($booking['check_in'])); ?></td>
+                            <td><?php echo date('M j, Y', strtotime($booking['check_out'])); ?></td>
+                            <td>
+                                <small><?php echo htmlspecialchars($booking['guest_name']); ?><br>
+                                <?php echo htmlspecialchars($booking['guest_email']); ?><br>
+                                <?php echo htmlspecialchars($booking['guest_phone']); ?></small>
+                            </td>
+                            <td>NPR <?php echo number_format($booking['total_price_npr'], 2); ?></td>
+                            <td>
+                                <span class="status status-<?php echo strtolower($booking['status']); ?>">
+                                    <?php echo ucfirst($booking['status']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($booking['status'] == 'pending'): ?>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                    <input type="hidden" name="booking_type" value="hotel">
+                                    <select name="booking_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block;">
+                                        <option value="pending" <?php echo $booking['status'] == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                        <option value="approved">Approve</option>
+                                        <option value="rejected">Reject</option>
+                                    </select>
+                                    <input type="hidden" name="update_booking_status" value="1">
+                                </form>
+                                <?php else: ?>
+                                <span class="text-muted"><?php echo ucfirst($booking['status']); ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+
+                <h4 style="margin-top: 3rem; margin-bottom: 1rem;">Activity Bookings</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Activity</th>
+                            <th>Booking Date</th>
+                            <th>Guest Info</th>
+                            <th>Total (NPR)</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($activity_bookings)): ?>
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 2rem;">No activity bookings yet.</td>
+                        </tr>
+                        <?php else: ?>
+                        <?php foreach($activity_bookings as $booking): ?>
+                        <tr>
+                            <td><?php echo $booking['id']; ?></td>
+                            <td><?php echo htmlspecialchars($booking['user_name']); ?></td>
+                            <td><?php echo htmlspecialchars($booking['activity_name']); ?></td>
+                            <td><?php echo date('M j, Y', strtotime($booking['booking_date'])); ?></td>
+                            <td>
+                                <small><?php echo htmlspecialchars($booking['guest_name']); ?><br>
+                                <?php echo htmlspecialchars($booking['guest_email']); ?><br>
+                                <?php echo htmlspecialchars($booking['guest_phone']); ?></small>
+                            </td>
+                            <td>NPR <?php echo number_format($booking['total_price_npr'], 2); ?></td>
+                            <td>
+                                <span class="status status-<?php echo strtolower($booking['status']); ?>">
+                                    <?php echo ucfirst($booking['status']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <?php if ($booking['status'] == 'pending'): ?>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                    <input type="hidden" name="booking_type" value="activity">
+                                    <select name="booking_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block;">
+                                        <option value="pending" <?php echo $booking['status'] == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                        <option value="approved">Approve</option>
+                                        <option value="rejected">Reject</option>
+                                    </select>
+                                    <input type="hidden" name="update_booking_status" value="1">
+                                </form>
+                                <?php else: ?>
+                                <span class="text-muted"><?php echo ucfirst($booking['status']); ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- Offer Modal -->
@@ -1292,13 +1874,14 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
 
     <!-- Itinerary Modal -->
     <div id="itineraryModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
             <div class="modal-header">
                 <h3>Add Popular Itinerary</h3>
                 <span class="close" onclick="closeModal('itineraryModal')">&times;</span>
             </div>
-            <form method="POST" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data" id="itineraryForm">
                 <input type="hidden" name="add_itinerary" value="1">
+                <input type="hidden" name="itinerary_days_json" id="itinerary_days_json">
                 <div class="form-group">
                     <label for="itinerary_title">Title</label>
                     <input type="text" id="itinerary_title" name="itinerary_title" class="form-control" required>
@@ -1324,6 +1907,17 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
+                </div>
+                <div class="form-group" style="border: 1px solid #e0e0e0; border-radius: 0.5rem; padding: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <h4 style="margin: 0;">Day-wise Itinerary</h4>
+                        <div>
+                            <button type="button" class="btn btn-secondary" onclick="addDayBlock()">Add Day</button>
+                            <button type="button" class="btn btn-light" onclick="clearDayBlocks()">Clear Days</button>
+                        </div>
+                    </div>
+                    <p style="color:#666; margin:0.5rem 0 1rem;">Add day details right now while creating the itinerary.</p>
+                    <div id="dayBlocksContainer" style="max-height: 300px; overflow-y: auto; display: grid; gap: 1rem;"></div>
                 </div>
                 <button type="submit" class="btn btn-primary">Save Itinerary</button>
             </form>
@@ -1410,6 +2004,91 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary">Create User</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hotel Modal -->
+    <div id="hotelModal" class="modal">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>Add Hotel</h3>
+                <span class="close" onclick="closeModal('hotelModal')">&times;</span>
+            </div>
+            <form method="POST" enctype="multipart/form-data" id="hotelForm">
+                <input type="hidden" name="add_hotel" value="1">
+                <input type="hidden" name="rooms_json" id="hotel_rooms_json">
+                <div class="form-group">
+                    <label for="hotel_name">Hotel Name *</label>
+                    <input type="text" id="hotel_name" name="hotel_name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="hotel_description">Description</label>
+                    <textarea id="hotel_description" name="hotel_description" class="form-control" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="hotel_location">Location *</label>
+                    <input type="text" id="hotel_location" name="hotel_location" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="hotel_image">Hotel Image</label>
+                    <input type="file" id="hotel_image" name="hotel_image" class="form-control" accept="image/*" onchange="previewImage(this, 'hotelPreview')">
+                    <img id="hotelPreview" class="image-preview" src="#" alt="Image Preview">
+                </div>
+                <div class="form-group">
+                    <label for="hotel_status">Status</label>
+                    <select id="hotel_status" name="hotel_status" class="form-control" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="form-group" style="border: 1px solid #e0e0e0; border-radius: 0.5rem; padding: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <h4 style="margin: 0;">Hotel Rooms</h4>
+                        <button type="button" class="btn btn-secondary" onclick="addRoomBlock()">Add Room</button>
+                    </div>
+                    <p style="color:#666; margin:0.5rem 0 1rem;">Add room types with AC/Non-AC options and prices in NPR.</p>
+                    <div id="roomBlocksContainer" style="max-height: 300px; overflow-y: auto; display: grid; gap: 1rem;"></div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Hotel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Activity Modal -->
+    <div id="activityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Activity</h3>
+                <span class="close" onclick="closeModal('activityModal')">&times;</span>
+            </div>
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="add_activity" value="1">
+                <div class="form-group">
+                    <label for="activity_name">Activity Name *</label>
+                    <input type="text" id="activity_name" name="activity_name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="activity_description">Description</label>
+                    <textarea id="activity_description" name="activity_description" class="form-control" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="activity_price_npr">Price (NPR) *</label>
+                    <input type="number" id="activity_price_npr" name="activity_price_npr" class="form-control" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="activity_image">Activity Image</label>
+                    <input type="file" id="activity_image" name="activity_image" class="form-control" accept="image/*" onchange="previewImage(this, 'activityPreview')">
+                    <img id="activityPreview" class="image-preview" src="#" alt="Image Preview">
+                </div>
+                <div class="form-group">
+                    <label for="activity_status">Status</label>
+                    <select id="activity_status" name="activity_status" class="form-control" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Activity</button>
             </form>
         </div>
     </div>
@@ -1509,6 +2188,84 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
                     reader.readAsDataURL(file);
                 });
             }
+        }
+        
+        // Inline day-wise blocks for itinerary creation
+        const dayBlocksContainer = document.getElementById('dayBlocksContainer');
+        const itineraryDaysInput = document.getElementById('itinerary_days_json');
+        
+        function renderInlineDays() {
+            if (!dayBlocksContainer || !itineraryDaysInput) return;
+            const days = Array.from(dayBlocksContainer.querySelectorAll('.day-block')).map(block => ({
+                day_number: parseInt(block.querySelector('.day-number').value, 10),
+                day_title: block.querySelector('.day-title').value.trim(),
+                day_description: block.querySelector('.day-description').value.trim(),
+                activities: block.querySelector('.day-activities').value.trim(),
+                accommodation: block.querySelector('.day-accommodation').value.trim(),
+                meals: block.querySelector('.day-meals').value.trim()
+            })).filter(d => d.day_number && d.day_title);
+            itineraryDaysInput.value = JSON.stringify(days);
+        }
+        
+        function addDayBlock() {
+            if (!dayBlocksContainer) return;
+            const block = document.createElement('div');
+            block.className = 'day-block';
+            block.style.border = '1px solid #e0e0e0';
+            block.style.borderRadius = '0.5rem';
+            block.style.padding = '0.75rem';
+            block.style.background = '#fafafa';
+            
+            const nextDay = dayBlocksContainer.children.length + 1;
+            
+            block.innerHTML = `
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.5rem;">
+                    <label style="min-width:80px; margin:0;">Day #</label>
+                    <input type="number" class="form-control day-number" value="${nextDay}" min="1" required style="width:120px;">
+                    <label style="min-width:80px; margin:0;">Title</label>
+                    <input type="text" class="form-control day-title" placeholder="Day title" required style="flex:1; min-width:200px;">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.day-block').remove(); renderInlineDays();">Remove</button>
+                </div>
+                <div class="form-group" style="margin-bottom:0.5rem;">
+                    <label>Description</label>
+                    <textarea class="form-control day-description" rows="2" placeholder="Short description"></textarea>
+                </div>
+                <div class="form-group" style="margin-bottom:0.5rem;">
+                    <label>Activities</label>
+                    <textarea class="form-control day-activities" rows="2" placeholder="Activities for the day"></textarea>
+                </div>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:180px;">
+                        <label>Accommodation</label>
+                        <input type="text" class="form-control day-accommodation" placeholder="Hotel or stay">
+                    </div>
+                    <div style="flex:1; min-width:180px;">
+                        <label>Meals</label>
+                        <input type="text" class="form-control day-meals" placeholder="Breakfast, Lunch...">
+                    </div>
+                </div>
+            `;
+            
+            block.querySelectorAll('input, textarea').forEach(el => {
+                el.addEventListener('input', renderInlineDays);
+            });
+            
+            dayBlocksContainer.appendChild(block);
+            renderInlineDays();
+        }
+        
+        function clearDayBlocks() {
+            if (!dayBlocksContainer) return;
+            dayBlocksContainer.innerHTML = '';
+            renderInlineDays();
+        }
+        
+        // Keep JSON synced on submit
+        const itineraryForm = document.getElementById('itineraryForm');
+        if (itineraryForm) {
+            itineraryForm.addEventListener('submit', function() {
+                renderInlineDays();
+            });
         }
         
         // Auto-hide alerts after 5 seconds
@@ -1664,6 +2421,194 @@ $all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN us
         document.getElementById('addDayForm')?.addEventListener('submit', function(e) {
             // Form will submit normally, then page will reload with success message
             // Days will be reloaded on next modal open
+        });
+
+        // Room Management Functions for Hotel Modal
+        let roomBlockCounter = 0;
+        
+        function addRoomBlock() {
+            roomBlockCounter++;
+            const container = document.getElementById('roomBlocksContainer');
+            const roomBlock = document.createElement('div');
+            roomBlock.id = 'roomBlock_' + roomBlockCounter;
+            roomBlock.style.border = '1px solid #e0e0e0';
+            roomBlock.style.borderRadius = '0.5rem';
+            roomBlock.style.padding = '1rem';
+            roomBlock.style.backgroundColor = '#f9f9f9';
+            roomBlock.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Room Type *</label>
+                        <input type="text" class="form-control room-type" placeholder="e.g., Deluxe, Standard" required>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">AC Type *</label>
+                        <select class="form-control ac-type" required>
+                            <option value="">Select</option>
+                            <option value="AC">AC</option>
+                            <option value="Non-AC">Non-AC</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Price (NPR) *</label>
+                        <input type="number" class="form-control room-price" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeRoomBlock('roomBlock_${roomBlockCounter}')">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(roomBlock);
+            updateHotelRoomsJson();
+        }
+        
+        function removeRoomBlock(blockId) {
+            document.getElementById(blockId).remove();
+            updateHotelRoomsJson();
+        }
+        
+        function updateHotelRoomsJson() {
+            const container = document.getElementById('roomBlocksContainer');
+            const roomBlocks = container.querySelectorAll('[id^="roomBlock_"]');
+            const rooms = [];
+            
+            roomBlocks.forEach(block => {
+                const roomType = block.querySelector('.room-type').value.trim();
+                const acType = block.querySelector('.ac-type').value;
+                const price = block.querySelector('.room-price').value;
+                
+                if (roomType && acType && price) {
+                    rooms.push({
+                        room_type: roomType,
+                        ac_type: acType,
+                        price_npr: parseFloat(price),
+                        available: 1
+                    });
+                }
+            });
+            
+            document.getElementById('hotel_rooms_json').value = JSON.stringify(rooms);
+        }
+        
+        // Add event listeners to room inputs
+        document.addEventListener('DOMContentLoaded', function() {
+            const roomContainer = document.getElementById('roomBlocksContainer');
+            if (roomContainer) {
+                roomContainer.addEventListener('input', updateHotelRoomsJson);
+                roomContainer.addEventListener('change', updateHotelRoomsJson);
+            }
+            
+            // Handle hotel form submission
+            const hotelForm = document.getElementById('hotelForm');
+            if (hotelForm) {
+                hotelForm.addEventListener('submit', function(e) {
+                    updateHotelRoomsJson();
+                });
+            }
+        });
+
+        // Day Block Management Functions for Itinerary Modal
+        let dayBlockCounter = 0;
+        
+        function addDayBlock() {
+            dayBlockCounter++;
+            const container = document.getElementById('dayBlocksContainer');
+            const dayBlock = document.createElement('div');
+            dayBlock.id = 'dayBlock_' + dayBlockCounter;
+            dayBlock.style.border = '1px solid #e0e0e0';
+            dayBlock.style.borderRadius = '0.5rem';
+            dayBlock.style.padding = '1rem';
+            dayBlock.style.backgroundColor = '#f9f9f9';
+            dayBlock.innerHTML = `
+                <div style="display: grid; gap: 1rem;">
+                    <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 1rem; align-items: start;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Day # *</label>
+                            <input type="number" class="form-control day-number" min="1" placeholder="1" required>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Day Title *</label>
+                            <input type="text" class="form-control day-title" placeholder="e.g., Arrival Day" required>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeDayBlock('dayBlock_${dayBlockCounter}')">Remove</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Description</label>
+                        <textarea class="form-control day-description" rows="2" placeholder="Day description..."></textarea>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Activities</label>
+                            <textarea class="form-control day-activities" rows="2" placeholder="Activities for this day"></textarea>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Accommodation</label>
+                            <input type="text" class="form-control day-accommodation" placeholder="Hotel name">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Meals</label>
+                            <input type="text" class="form-control day-meals" placeholder="e.g., Breakfast, Lunch">
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(dayBlock);
+            updateItineraryDaysJson();
+        }
+        
+        function removeDayBlock(blockId) {
+            document.getElementById(blockId).remove();
+            updateItineraryDaysJson();
+        }
+        
+        function clearDayBlocks() {
+            const container = document.getElementById('dayBlocksContainer');
+            container.innerHTML = '';
+            dayBlockCounter = 0;
+            updateItineraryDaysJson();
+        }
+        
+        function updateItineraryDaysJson() {
+            const container = document.getElementById('dayBlocksContainer');
+            const dayBlocks = container.querySelectorAll('[id^="dayBlock_"]');
+            const days = [];
+            
+            dayBlocks.forEach(block => {
+                const dayNumber = block.querySelector('.day-number').value;
+                const dayTitle = block.querySelector('.day-title').value.trim();
+                
+                if (dayNumber && dayTitle) {
+                    days.push({
+                        day_number: parseInt(dayNumber),
+                        day_title: dayTitle,
+                        day_description: block.querySelector('.day-description').value.trim(),
+                        activities: block.querySelector('.day-activities').value.trim(),
+                        accommodation: block.querySelector('.day-accommodation').value.trim(),
+                        meals: block.querySelector('.day-meals').value.trim()
+                    });
+                }
+            });
+            
+            document.getElementById('itinerary_days_json').value = JSON.stringify(days);
+        }
+        
+        // Add event listeners to day inputs
+        document.addEventListener('DOMContentLoaded', function() {
+            const dayContainer = document.getElementById('dayBlocksContainer');
+            if (dayContainer) {
+                dayContainer.addEventListener('input', updateItineraryDaysJson);
+                dayContainer.addEventListener('change', updateItineraryDaysJson);
+            }
+            
+            // Handle itinerary form submission
+            const itineraryForm = document.getElementById('itineraryForm');
+            if (itineraryForm) {
+                itineraryForm.addEventListener('submit', function(e) {
+                    updateItineraryDaysJson();
+                });
+            }
         });
     </script>
 </body>

@@ -13,19 +13,23 @@ $user_id = $_SESSION['user_id'];
 
 // Handle remove item from cart
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['remove_item'])) {
-    $item_id = $_POST['item_id'] ?? 0;
-    $stmt = $pdo->prepare("DELETE FROM cart_items WHERE id = ? AND user_id = ?");
-    $stmt->execute([$item_id, $user_id]);
+    $item_id = filter_input(INPUT_POST, 'item_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($item_id) {
+        $stmt = $pdo->prepare("DELETE FROM cart_items WHERE id = ? AND user_id = ?");
+        $stmt->execute([$item_id, $user_id]);
+    }
     header("Location: cart.php");
     exit;
 }
 
 // Handle update quantity
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_quantity'])) {
-    $item_id = $_POST['item_id'] ?? 0;
-    $quantity = max(1, intval($_POST['quantity'] ?? 1));
-    $stmt = $pdo->prepare("UPDATE cart_items SET quantity = ? WHERE id = ? AND user_id = ?");
-    $stmt->execute([$quantity, $item_id, $user_id]);
+    $item_id = filter_input(INPUT_POST, 'item_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    $quantity = filter_input(INPUT_POST, 'quantity', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($item_id && $quantity) {
+        $stmt = $pdo->prepare("UPDATE cart_items SET quantity = ? WHERE id = ? AND user_id = ?");
+        $stmt->execute([$quantity, $item_id, $user_id]);
+    }
     header("Location: cart.php");
     exit;
 }
