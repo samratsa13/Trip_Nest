@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['book_hotel'])) {
         $guest_name = trim($_POST['guest_name']);
         $guest_email = trim($_POST['guest_email']);
         $guest_phone = trim($_POST['guest_phone']);
+        $quantity = intval($_POST['quantity'] ?? 1);
         
         // Validation
         if (empty($guest_name) || empty($guest_email) || empty($guest_phone)) {
@@ -26,22 +27,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['book_hotel'])) {
             $booking_error = "Please enter a valid email address.";
         } elseif (strtotime($check_in) >= strtotime($check_out)) {
             $booking_error = "Check-out date must be after check-in date.";
+        } elseif ($quantity < 1) {
+            $booking_error = "Please select at least 1 room.";
         } else {
             // Get room price
-            $room_stmt = $pdo->prepare("SELECT price_npr FROM hotel_rooms WHERE id = ?");
+            // Get room price and quantity
+            $room_stmt = $pdo->prepare("SELECT price_npr, quantity FROM hotel_rooms WHERE id = ?");
             $room_stmt->execute([$room_id]);
             $room = $room_stmt->fetch();
             
             if ($room) {
-                $nights = (strtotime($check_out) - strtotime($check_in)) / (60 * 60 * 24);
-                $total_price = $room['price_npr'] * $nights;
+                // Check availability
+                $check_stmt = $pdo->prepare("SELECT COUNT(*) FROM hotel_bookings 
+                    WHERE room_id = ? 
+                    AND status != 'rejected' 
+                    AND NOT (check_out <= ? OR check_in >= ?)");
+                $check_stmt->execute([$room_id, $check_in, $check_out]);
+                $booked_count = $check_stmt->fetchColumn();
+
+                $available_rooms = ($room['quantity'] ?? 1) - $booked_count;
                 
-                // Create booking
-                $stmt = $pdo->prepare("INSERT INTO hotel_bookings (user_id, hotel_id, room_id, check_in, check_out, guest_name, guest_email, guest_phone, total_price_npr, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
-                if ($stmt->execute([$user_id, $hotel_id, $room_id, $check_in, $check_out, $guest_name, $guest_email, $guest_phone, $total_price])) {
-                    $booking_success = "Booking request submitted successfully! Admin will review and approve your booking.";
+                if ($available_rooms <= 0) {
+                    $booking_error = "Sorry, this room is fully booked for the selected dates.";
+                } elseif ($quantity > $available_rooms) {
+                    $booking_error = "Only " . $available_rooms . " room(s) available for the selected dates. You requested " . $quantity . ".";
                 } else {
-                    $booking_error = "Error submitting booking. Please try again.";
+                    $nights = (strtotime($check_out) - strtotime($check_in)) / (60 * 60 * 24);
+                    $total_price = $room['price_npr'] * $nights * $quantity;
+                    
+                    // Create booking
+                    $stmt = $pdo->prepare("INSERT INTO hotel_bookings (user_id, hotel_id, room_id, check_in, check_out, guest_name, guest_email, guest_phone, total_price_npr, quantity, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+                    if ($stmt->execute([$user_id, $hotel_id, $room_id, $check_in, $check_out, $guest_name, $guest_email, $guest_phone, $total_price, $quantity])) {
+                        $booking_success = "Booking request submitted successfully! Admin will review and approve your booking.";
+                    } else {
+                        $booking_error = "Error submitting booking. Please try again.";
+                    }
                 }
             } else {
                 $booking_error = "Invalid room selected.";
@@ -55,6 +75,60 @@ try {
     $hotels = $pdo->query("SELECT * FROM hotels WHERE status = 'active' ORDER BY created_at DESC")->fetchAll();
 } catch (PDOException $e) {
     $hotels = [];
+}
+
+// Handle server-side search with searching algorithm
+if (isset($_GET['q']) && $_GET['q'] !== '') {
+    $search_key = strtolower(trim($_GET['q']));
+    
+    // Sort hotels by name for search algorithm
+    usort($hotels, function ($a, $b) {
+        return strcmp(strtolower($a['name']), strtolower($b['name']));
+    });
+    
+    // Binary search function
+    function binarySearchHotels($arr, $key) {
+        $low = 0;
+        $high = count($arr) - 1;
+        $results = [];
+        
+        while ($low <= $high) {
+            $mid = floor(($low + $high) / 2);
+            $name = strtolower($arr[$mid]['name']);
+            
+            if (strpos($name, $key) !== false) {
+                $results[] = $arr[$mid];
+                
+                // Left neighbors
+                $i = $mid - 1;
+                while ($i >= 0 && strpos(strtolower($arr[$i]['name']), $key) !== false) {
+                    $results[] = $arr[$i--];
+                }
+                
+                // Right neighbors
+                $i = $mid + 1;
+                while ($i < count($arr) && strpos(strtolower($arr[$i]['name']), $key) !== false) {
+                    $results[] = $arr[$i++];
+                }
+                break;
+            }
+            elseif ($key < $name) {
+                $high = $mid - 1;
+            } else {
+                $low = $mid + 1;
+            }
+        }
+        
+        // Sort matched results
+        usort($results, function ($a, $b) {
+            return strcmp(strtolower($a['name']), strtolower($b['name']));
+        });
+        
+        return $results;
+    }
+    
+    // Perform search
+    $hotels = binarySearchHotels($hotels, $search_key);
 }
 
 // Get hotel details if ID is provided
@@ -251,6 +325,52 @@ if (isset($_GET['id'])) {
         .form-group select.error {
             border-color: #dc3545;
         }
+        
+        .search-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 0.8rem 1rem;
+            border: 2px solid #031881;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            box-shadow: 0 0 0 3px rgba(3, 24, 129, 0.1);
+        }
+        
+        .search-button {
+            padding: 0.8rem 2rem;
+            background: linear-gradient(90deg, #031881, #6f7ecb);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .search-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #666;
+            font-size: 1.1rem;
+        }
     </style>
 </head>
 <body>
@@ -271,7 +391,7 @@ if (isset($_GET['id'])) {
             <li><a href="destination.php">Destinations</a></li>
             <!-- <li><a href="hotels.php" class="active">Hotels</a></li>
             <li><a href="activities.php">Activities</a></li> -->
-            <li><a href="Tourism.php#about-us">About Us</a></li>
+            <li><a href="bookings.php">Bookings</a></li>
             <li><a href="Tourism.php#contact">Contact</a></li>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <li class="user-menu">
@@ -326,14 +446,15 @@ if (isset($_GET['id'])) {
                         <div class="room-card">
                             <div class="room-info">
                                 <h4><?php echo htmlspecialchars($room['room_type']); ?> - <?php echo htmlspecialchars($room['ac_type']); ?></h4>
-                                <p style="color: #666;">Available: <?php echo $room['available']; ?> room(s)</p>
                             </div>
                             <div>
                                 <div class="room-price">NPR <?php echo number_format($room['price_npr'], 2); ?>/night</div>
-                                <?php if (isset($_SESSION['user_id'])): ?>
+                                <?php if (isset($_SESSION['user_id']) && $_SESSION['user_role'] !== 'admin'): ?>
                                     <button class="view-btn" onclick="openBookingModal(<?php echo $selected_hotel['id']; ?>, <?php echo $room['id']; ?>, '<?php echo htmlspecialchars($room['room_type']); ?>', '<?php echo htmlspecialchars($room['ac_type']); ?>', <?php echo $room['price_npr']; ?>)">
                                         Book Now
                                     </button>
+                                <?php elseif (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'admin'): ?>
+                                    <button class="view-btn" style="background: #999; cursor: not-allowed; opacity: 0.6;" disabled>Not Available</button>
                                 <?php else: ?>
                                     <a href="login.php" class="view-btn" style="text-decoration: none; display: block; text-align: center;">Login to Book</a>
                                 <?php endif; ?>
@@ -349,14 +470,22 @@ if (isset($_GET['id'])) {
             <h1 style="text-align: center; color: #031881; margin-bottom: 1rem;">Our Hotels</h1>
             <p style="text-align: center; color: #666; margin-bottom: 2rem;">Find the perfect accommodation for your stay</p>
             
-            <?php if (empty($hotels)): ?>
-                <p style="text-align: center; padding: 4rem;">No hotels available at this time.</p>
-            <?php else: ?>
-                <div class="hotels-grid">
+            <!-- Search Bar -->
+            <div class="search-container">
+                <form method="GET" style="display: flex; gap: 0.5rem; width: 100%;">
+                    <input type="text" name="q" class="search-input" placeholder="Search hotels by name or location..." value="<?php echo isset($_GET['q']) ? htmlspecialchars($_GET['q']) : ''; ?>">
+                    <button type="submit" class="search-button"><i class="fas fa-search"></i> Search</button>
+                </form>
+            </div>
+            
+            <div class="hotels-grid">
+                <?php if (empty($hotels)): ?>
+                    <p style="text-align: center; padding: 4rem; grid-column: 1/-1;">No hotels found.</p>
+                <?php else: ?>
                     <?php foreach ($hotels as $hotel): ?>
                         <div class="hotel-card">
                             <?php if (!empty($hotel['image_path'])): ?>
-                                <img src="<?php echo $hotel['image_path']; ?>" alt="<?php echo htmlspecialchars($hotel['name']); ?>" class="hotel-image">
+                                <img src="<?php echo htmlspecialchars($hotel['image_path']); ?>" alt="<?php echo htmlspecialchars($hotel['name']); ?>" class="hotel-image">
                             <?php endif; ?>
                             <div class="hotel-info">
                                 <h3><?php echo htmlspecialchars($hotel['name']); ?></h3>
@@ -364,14 +493,14 @@ if (isset($_GET['id'])) {
                                     <i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($hotel['location']); ?>
                                 </p>
                                 <?php if (!empty($hotel['description'])): ?>
-                                    <p style="color: #666; margin-bottom: 1rem;"><?php echo htmlspecialchars(substr($hotel['description'], 0, 100)) . '...'; ?></p>
+                                    <p style="color: #666; margin-bottom: 1rem;"><?php echo htmlspecialchars(substr($hotel['description'], 0, 100)); ?>...</p>
                                 <?php endif; ?>
                                 <a href="hotels.php?id=<?php echo $hotel['id']; ?>" class="view-btn" style="text-decoration: none; display: block; text-align: center;">View Details</a>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
     <?php endif; ?>
 
@@ -388,6 +517,15 @@ if (isset($_GET['id'])) {
                 <input type="hidden" name="room_id" id="booking_room_id">
                 
                 <div id="roomInfo" style="background: #f9f9f9; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;"></div>
+                
+                <div class="form-group">
+                    <label>Number of Rooms *</label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <button type="button" onclick="decreaseQuantity()" style="padding: 0.5rem 1rem; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 0.3rem; font-weight: 600;">−</button>
+                        <input type="number" id="quantity" name="quantity" min="1" value="1" style="width: 70px; text-align: center; padding: 0.8rem; border: 1px solid #ccc; border-radius: 0.3rem; font-weight: 600;">
+                        <button type="button" onclick="increaseQuantity()" style="padding: 0.5rem 1rem; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 0.3rem; font-weight: 600;">+</button>
+                    </div>
+                </div>
                 
                 <div class="form-group">
                     <label>Check-in Date *</label>
@@ -435,6 +573,8 @@ if (isset($_GET['id'])) {
             </form>
         </div>
     </div>
+<?php
+?>
 
     <script>
         function openBookingModal(hotelId, roomId, roomType, acType, pricePerNight) {
@@ -452,17 +592,34 @@ if (isset($_GET['id'])) {
             document.getElementById('bookingModal').style.display = 'none';
         }
         
+        function increaseQuantity() {
+            const qtyInput = document.getElementById('quantity');
+            const currentQty = parseInt(qtyInput.value) || 1;
+            qtyInput.value = currentQty + 1;
+            calculateTotal();
+        }
+        
+        function decreaseQuantity() {
+            const qtyInput = document.getElementById('quantity');
+            const currentQty = parseInt(qtyInput.value) || 1;
+            if (currentQty > 1) {
+                qtyInput.value = currentQty - 1;
+                calculateTotal();
+            }
+        }
+        
         function calculateTotal() {
             const checkIn = new Date(document.getElementById('check_in').value);
             const checkOut = new Date(document.getElementById('check_out').value);
+            const quantity = parseInt(document.getElementById('quantity').value) || 1;
             const roomInfo = document.getElementById('roomInfo').textContent;
             const priceMatch = roomInfo.match(/NPR ([\d.]+)/);
             
             if (checkIn && checkOut && priceMatch && checkOut > checkIn) {
                 const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
                 const pricePerNight = parseFloat(priceMatch[1]);
-                const total = nights * pricePerNight;
-                document.getElementById('totalPrice').textContent = `Total: NPR ${total.toFixed(2)} (${nights} night${nights > 1 ? 's' : ''})`;
+                const total = nights * pricePerNight * quantity;
+                document.getElementById('totalPrice').textContent = `Total: NPR ${total.toFixed(2)} (${quantity} room${quantity > 1 ? 's' : ''} × ${nights} night${nights > 1 ? 's' : ''})`;
             } else {
                 document.getElementById('totalPrice').textContent = '';
             }
@@ -587,6 +744,13 @@ if (isset($_GET['id'])) {
         
         document.getElementById('check_out')?.addEventListener('change', function() {
             validateBookingField(this);
+            calculateTotal();
+        });
+        
+        document.getElementById('quantity')?.addEventListener('change', function() {
+            let qty = parseInt(this.value) || 1;
+            if (qty < 1) qty = 1;
+            this.value = qty;
             calculateTotal();
         });
         

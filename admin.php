@@ -18,6 +18,23 @@ foreach ($upload_dirs as $dir) {
     }
 }
 
+// Server-side image validation function
+function validateImageUpload($file) {
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'webp'];
+    
+    if (!isset($file) || $file['error'] != 0) {
+        return ['valid' => false, 'message' => 'No file uploaded or upload error occurred'];
+    }
+    
+    $file_extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    
+    if (!in_array($file_extension, $allowed_extensions)) {
+        return ['valid' => false, 'message' => 'Invalid file extension. Only jpg, jpeg, png, and webp are allowed'];
+    }
+    
+    return ['valid' => true, 'extension' => $file_extension];
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Add Special Offer
     if (isset($_POST['add_offer'])) {
@@ -27,14 +44,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         // Handle image upload
         $image_path = '';
-        if (isset($_FILES['offer_image']) && $_FILES['offer_image']['error'] == 0) {
-            $target_dir = "uploads/offers/";
-            $image_extension = pathinfo($_FILES['offer_image']['name'], PATHINFO_EXTENSION);
-            $image_name = 'offer_' . time() . '.' . $image_extension;
-            $target_file = $target_dir . $image_name;
-            
-            if (move_uploaded_file($_FILES['offer_image']['tmp_name'], $target_file)) {
-                $image_path = $target_file;
+        if (isset($_FILES['offer_image'])) {
+            $validation_result = validateImageUpload($_FILES['offer_image']);
+            if (!$validation_result['valid']) {
+                $offer_error = $validation_result['message'];
+            } else {
+                $target_dir = "uploads/offers/";
+                $image_name = 'offer_' . time() . '.' . $validation_result['extension'];
+                $target_file = $target_dir . $image_name;
+                
+                if (move_uploaded_file($_FILES['offer_image']['tmp_name'], $target_file)) {
+                    $image_path = $target_file;
+                }
             }
         }
         
@@ -46,46 +67,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Create itinerary_days table if it doesn't exist
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            itinerary_id INT NOT NULL,
-            day_number INT NOT NULL,
-            day_title VARCHAR(255) NOT NULL,
-            day_description TEXT,
-            activities TEXT,
-            accommodation VARCHAR(255),
-            meals VARCHAR(255),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (itinerary_id) REFERENCES popular_itineraries(id) ON DELETE CASCADE,
-            INDEX idx_itinerary_id (itinerary_id),
-            UNIQUE KEY unique_day (itinerary_id, day_number)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } catch (PDOException $e) {
-        // Table might already exist
-    }
+    // // Create itinerary_days table if it doesn't exist
+    // try {
+    //     $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
+    //         id INT AUTO_INCREMENT PRIMARY KEY,
+    //         itinerary_id INT NOT NULL,
+    //         day_number INT NOT NULL,
+    //         day_title VARCHAR(255) NOT NULL,
+    //         day_description TEXT,
+    //         activities TEXT,
+    //         accommodation VARCHAR(255),
+    //         meals VARCHAR(255),
+    //         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    //         FOREIGN KEY (itinerary_id) REFERENCES popular_itineraries(id) ON DELETE CASCADE,
+    //         INDEX idx_itinerary_id (itinerary_id),
+    //         UNIQUE KEY unique_day (itinerary_id, day_number)
+    //     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // } catch (PDOException $e) {
+    //     // Table might already exist
+    // }
     
     // Create itinerary_days table if it doesn't exist
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            itinerary_id INT NOT NULL,
-            day_number INT NOT NULL,
-            day_title VARCHAR(255) NOT NULL,
-            day_description TEXT,
-            activities TEXT,
-            accommodation VARCHAR(255),
-            meals VARCHAR(255),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (itinerary_id) REFERENCES popular_itineraries(id) ON DELETE CASCADE,
-            INDEX idx_itinerary_id (itinerary_id),
-            UNIQUE KEY unique_day (itinerary_id, day_number)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } catch (PDOException $e) {
-        // Table might already exist
-    }
-    
+
     // Add column for multiple images if it doesn't exist
     try {
         $pdo->exec("ALTER TABLE popular_itineraries ADD COLUMN additional_images TEXT COMMENT 'JSON array of additional image paths'");
@@ -117,14 +120,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if (empty($errors)) {
             // Handle primary image upload (for backward compatibility)
         $image_path = '';
-        if (isset($_FILES['itinerary_image']) && $_FILES['itinerary_image']['error'] == 0) {
-            $target_dir = "uploads/itineraries/";
-            $image_extension = pathinfo($_FILES['itinerary_image']['name'], PATHINFO_EXTENSION);
-            $image_name = 'itinerary_' . time() . '.' . $image_extension;
-            $target_file = $target_dir . $image_name;
-            
-            if (move_uploaded_file($_FILES['itinerary_image']['tmp_name'], $target_file)) {
-                $image_path = $target_file;
+        $image_upload_error = '';
+        if (isset($_FILES['itinerary_image'])) {
+            $validation_result = validateImageUpload($_FILES['itinerary_image']);
+            if (!$validation_result['valid']) {
+                $image_upload_error = $validation_result['message'];
+            } else {
+                $target_dir = "uploads/itineraries/";
+                $image_name = 'itinerary_' . time() . '.' . $validation_result['extension'];
+                $target_file = $target_dir . $image_name;
+                
+                if (move_uploaded_file($_FILES['itinerary_image']['tmp_name'], $target_file)) {
+                    $image_path = $target_file;
+                }
             }
         }
         
@@ -137,56 +145,71 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             for ($i = 0; $i < $file_count; $i++) {
                 if ($_FILES['itinerary_images']['error'][$i] == 0) {
-                    $image_extension = pathinfo($_FILES['itinerary_images']['name'][$i], PATHINFO_EXTENSION);
-                    $image_name = 'itinerary_' . time() . '_' . $i . '.' . $image_extension;
-                    $target_file = $target_dir . $image_name;
+                    // Validate each file
+                    $file_to_validate = [
+                        'name' => $_FILES['itinerary_images']['name'][$i],
+                        'error' => $_FILES['itinerary_images']['error'][$i],
+                        'tmp_name' => $_FILES['itinerary_images']['tmp_name'][$i]
+                    ];
                     
-                    if (move_uploaded_file($_FILES['itinerary_images']['tmp_name'][$i], $target_file)) {
-                        $additional_images[] = $target_file;
+                    $validation_result = validateImageUpload($file_to_validate);
+                    if ($validation_result['valid']) {
+                        $image_name = 'itinerary_' . time() . '_' . $i . '.' . $validation_result['extension'];
+                        $target_file = $target_dir . $image_name;
+                        
+                        if (move_uploaded_file($_FILES['itinerary_images']['tmp_name'][$i], $target_file)) {
+                            $additional_images[] = $target_file;
+                        }
+                    } else {
+                        $image_upload_error = $validation_result['message'];
                     }
                 }
             }
         }
         
-        // If no primary image but we have additional images, use first one as primary
-        if (empty($image_path) && !empty($additional_images)) {
-            $image_path = $additional_images[0];
-            array_shift($additional_images); // Remove it from additional images
-        }
-        
-        // Convert additional images array to JSON
-        $additional_images_json = !empty($additional_images) ? json_encode($additional_images) : null;
-        
-        $stmt = $pdo->prepare("INSERT INTO popular_itineraries (title, description, image_path, additional_images, status) VALUES (?, ?, ?, ?, ?)");
-        if ($stmt->execute([$title, $description, $image_path, $additional_images_json, $status])) {
-            $itinerary_id = $pdo->lastInsertId();
-            // Handle inline day-wise itinerary creation
-            if (!empty($_POST['itinerary_days_json'])) {
-                $days = json_decode($_POST['itinerary_days_json'], true);
-                if (is_array($days)) {
-                    $day_stmt = $pdo->prepare("INSERT INTO itinerary_days (itinerary_id, day_number, day_title, day_description, activities, accommodation, meals) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE day_title = VALUES(day_title), day_description = VALUES(day_description), activities = VALUES(activities), accommodation = VALUES(accommodation), meals = VALUES(meals)");
-                    foreach ($days as $day) {
-                        $day_number = intval($day['day_number'] ?? 0);
-                        $day_title = trim($day['day_title'] ?? '');
-                        if ($day_number > 0 && $day_title !== '') {
-                            $day_stmt->execute([
-                                $itinerary_id,
-                                $day_number,
-                                $day_title,
-                                $day['day_description'] ?? '',
-                                $day['activities'] ?? '',
-                                $day['accommodation'] ?? '',
-                                $day['meals'] ?? ''
-                            ]);
+        // If image upload error occurred, set it
+        if (!empty($image_upload_error)) {
+            $itinerary_error = $image_upload_error;
+        } else {
+            // If no primary image but we have additional images, use first one as primary
+            if (empty($image_path) && !empty($additional_images)) {
+                $image_path = $additional_images[0];
+                array_shift($additional_images); // Remove it from additional images
+            }
+            
+            // Convert additional images array to JSON
+            $additional_images_json = !empty($additional_images) ? json_encode($additional_images) : null;
+            
+            $stmt = $pdo->prepare("INSERT INTO popular_itineraries (title, description, image_path, additional_images, status) VALUES (?, ?, ?, ?, ?)");
+            if ($stmt->execute([$title, $description, $image_path, $additional_images_json, $status])) {
+                $itinerary_id = $pdo->lastInsertId();
+                // Handle inline day-wise itinerary creation
+                if (!empty($_POST['itinerary_days_json'])) {
+                    $days = json_decode($_POST['itinerary_days_json'], true);
+                    if (is_array($days)) {
+                        $day_stmt = $pdo->prepare("INSERT INTO itinerary_days (itinerary_id, day_number, day_title, day_description, activities, accommodation, meals) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE day_title = VALUES(day_title), day_description = VALUES(day_description), activities = VALUES(activities), accommodation = VALUES(accommodation), meals = VALUES(meals)");
+                        foreach ($days as $day) {
+                            $day_number = intval($day['day_number'] ?? 0);
+                            $day_title = trim($day['day_title'] ?? '');
+                            if ($day_number > 0 && $day_title !== '') {
+                                $day_stmt->execute([
+                                    $itinerary_id,
+                                    $day_number,
+                                    $day_title,
+                                    $day['day_description'] ?? '',
+                                    $day['activities'] ?? '',
+                                    $day['accommodation'] ?? '',
+                                    $day['meals'] ?? ''
+                                ]);
+                            }
                         }
                     }
                 }
+                $itinerary_success = "Popular itinerary added successfully!";
+            } else {
+                $itinerary_error = "Error adding popular itinerary!";
             }
-            $itinerary_success = "Popular itinerary added successfully!";
-        } else {
-            $itinerary_error = "Error adding popular itinerary!";
         }
-        } else {
             $itinerary_error = implode(", ", $errors);
         }
     }
@@ -316,22 +339,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if (empty($errors)) {
             // Handle image upload
             $image_path = '';
-            if (isset($_FILES['destination_image']) && $_FILES['destination_image']['error'] == 0) {
-                $target_dir = "uploads/destinations/";
-                $image_extension = pathinfo($_FILES['destination_image']['name'], PATHINFO_EXTENSION);
-                $image_name = 'destination_' . time() . '.' . $image_extension;
-                $target_file = $target_dir . $image_name;
-                
-                if (move_uploaded_file($_FILES['destination_image']['tmp_name'], $target_file)) {
-                    $image_path = $target_file;
+            if (isset($_FILES['destination_image'])) {
+                $validation_result = validateImageUpload($_FILES['destination_image']);
+                if (!$validation_result['valid']) {
+                    $destination_error = $validation_result['message'];
+                } else {
+                    $target_dir = "uploads/destinations/";
+                    $image_name = 'destination_' . time() . '.' . $validation_result['extension'];
+                    $target_file = $target_dir . $image_name;
+                    
+                    if (move_uploaded_file($_FILES['destination_image']['tmp_name'], $target_file)) {
+                        $image_path = $target_file;
+                    }
                 }
             }
             
-            $stmt = $pdo->prepare("INSERT INTO destinations (name, description, image_path, status) VALUES (?, ?, ?, ?)");
-            if ($stmt->execute([$name, $description, $image_path, $status])) {
-                $destination_success = "Destination added successfully!";
-            } else {
-                $destination_error = "Error adding destination!";
+            // Only proceed with insert if no validation error
+            if (empty($destination_error)) {
+                $stmt = $pdo->prepare("INSERT INTO destinations (name, description, image_path, status) VALUES (?, ?, ?, ?)");
+                if ($stmt->execute([$name, $description, $image_path, $status])) {
+                    $destination_success = "Destination added successfully!";
+                } else {
+                    $destination_error = "Error adding destination!";
+                }
             }
         } else {
             $destination_error = implode(", ", $errors);
@@ -402,43 +432,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if (empty($errors)) {
             $image_path = '';
-        if (isset($_FILES['hotel_image']) && $_FILES['hotel_image']['error'] == 0) {
-            $target_dir = "uploads/hotels/";
-            if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-            $image_extension = pathinfo($_FILES['hotel_image']['name'], PATHINFO_EXTENSION);
-            $image_name = 'hotel_' . time() . '.' . $image_extension;
-            $target_file = $target_dir . $image_name;
-            
-            if (move_uploaded_file($_FILES['hotel_image']['tmp_name'], $target_file)) {
-                $image_path = $target_file;
-            }
-        }
-        
-        $stmt = $pdo->prepare("INSERT INTO hotels (name, description, location, image_path, status) VALUES (?, ?, ?, ?, ?)");
-        if ($stmt->execute([$name, $description, $location, $image_path, $status])) {
-            $hotel_id = $pdo->lastInsertId();
-            $hotel_success = "Hotel added successfully!";
-            
-            // Add rooms if provided
-            if (!empty($_POST['rooms_json'])) {
-                $rooms = json_decode($_POST['rooms_json'], true);
-                if (is_array($rooms)) {
-                    $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, available) VALUES (?, ?, ?, ?, ?)");
-                    foreach ($rooms as $room) {
-                        if (!empty($room['room_type']) && !empty($room['ac_type']) && !empty($room['price_npr'])) {
-                            $room_stmt->execute([
-                                $hotel_id,
-                                $room['room_type'],
-                                $room['ac_type'],
-                                $room['price_npr'],
-                                $room['available'] ?? 1
-                            ]);
-                        }
+            if (isset($_FILES['hotel_image'])) {
+                $validation_result = validateImageUpload($_FILES['hotel_image']);
+                if (!$validation_result['valid']) {
+                    $hotel_error = $validation_result['message'];
+                } else {
+                    $target_dir = "uploads/hotels/";
+                    if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+                    $image_name = 'hotel_' . time() . '.' . $validation_result['extension'];
+                    $target_file = $target_dir . $image_name;
+                    
+                    if (move_uploaded_file($_FILES['hotel_image']['tmp_name'], $target_file)) {
+                        $image_path = $target_file;
                     }
                 }
             }
-            } else {
-                $hotel_error = "Error adding hotel!";
+            
+            // Only proceed with insert if no validation error
+            if (empty($hotel_error)) {
+                $stmt = $pdo->prepare("INSERT INTO hotels (name, description, location, image_path, status) VALUES (?, ?, ?, ?, ?)");
+                if ($stmt->execute([$name, $description, $location, $image_path, $status])) {
+                    $hotel_id = $pdo->lastInsertId();
+                    $hotel_success = "Hotel added successfully!";
+                    
+                    // Add rooms if provided
+                    if (!empty($_POST['rooms_json'])) {
+                        $rooms = json_decode($_POST['rooms_json'], true);
+                        if (is_array($rooms)) {
+                            $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, quantity, available) VALUES (?, ?, ?, ?, ?, ?)");
+                            foreach ($rooms as $room) {
+                                if (!empty($room['room_type']) && !empty($room['ac_type']) && !empty($room['price_npr'])) {
+                                    $room_stmt->execute([
+                                        $hotel_id,
+                                        $room['room_type'],
+                                        $room['ac_type'],
+                                        $room['price_npr'],
+                                        $room['quantity'] ?? 1,
+                                        $room['available'] ?? 1
+                                    ]);
+                                }
+                            }
+                        }
+                    } else {
+                        $hotel_error = "Error adding hotel!";
+                    }
+                }
             }
         } else {
             $hotel_error = implode(", ", $errors);
@@ -478,6 +516,100 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
+    // Edit Hotel
+    if (isset($_POST['edit_hotel'])) {
+        $hotel_id = $_POST['hotel_id'];
+        $name = trim($_POST['hotel_name'] ?? '');
+        $description = trim($_POST['hotel_description'] ?? '');
+        $location = trim($_POST['hotel_location'] ?? '');
+        $status = $_POST['hotel_status'] ?? 'active';
+        
+        // Validation (same as add_hotel)
+        $errors = [];
+        
+        if (empty($name)) {
+            $errors[] = "Hotel name is required";
+        } elseif (strlen($name) < 3 || strlen($name) > 100) {
+            $errors[] = "Hotel name must be 3-100 characters";
+        }
+        
+        if (!empty($description) && strlen($description) > 1000) {
+            $errors[] = "Description must be maximum 1000 characters";
+        }
+        
+        if (empty($location)) {
+            $errors[] = "Location is required";
+        } elseif (strlen($location) < 3 || strlen($location) > 100) {
+            $errors[] = "Location must be 3-100 characters";
+        } elseif (!preg_match('/^[a-zA-Z0-9\s,\-]{3,100}$/', $location)) {
+            $errors[] = "Location can only contain letters, numbers, spaces, commas, and hyphens";
+        }
+        
+        if (empty($errors)) {
+            // Handle image upload (optional - keep existing if no new image)
+            $image_path = null;
+            if (isset($_FILES['hotel_image']) && $_FILES['hotel_image']['error'] == 0) {
+                $target_dir = "uploads/hotels/";
+                if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+                $image_extension = pathinfo($_FILES['hotel_image']['name'], PATHINFO_EXTENSION);
+                $image_name = 'hotel_' . time() . '.' . $image_extension;
+                $target_file = $target_dir . $image_name;
+                
+                if (move_uploaded_file($_FILES['hotel_image']['tmp_name'], $target_file)) {
+                    // Delete old image if exists
+                    $stmt = $pdo->prepare("SELECT image_path FROM hotels WHERE id = ?");
+                    $stmt->execute([$hotel_id]);
+                    $old_hotel = $stmt->fetch();
+                    if ($old_hotel && !empty($old_hotel['image_path']) && file_exists($old_hotel['image_path'])) {
+                        unlink($old_hotel['image_path']);
+                    }
+                    $image_path = $target_file;
+                }
+            }
+            
+            // Build update query
+            if ($image_path) {
+                $stmt = $pdo->prepare("UPDATE hotels SET name = ?, description = ?, location = ?, image_path = ?, status = ? WHERE id = ?");
+                $update_success = $stmt->execute([$name, $description, $location, $image_path, $status, $hotel_id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE hotels SET name = ?, description = ?, location = ?, status = ? WHERE id = ?");
+                $update_success = $stmt->execute([$name, $description, $location, $status, $hotel_id]);
+            }
+            
+            if ($update_success) {
+                // Update rooms - delete existing and insert new
+                if (isset($_POST['edit_rooms_json'])) {
+                    // Delete existing rooms
+                    $delete_stmt = $pdo->prepare("DELETE FROM hotel_rooms WHERE hotel_id = ?");
+                    $delete_stmt->execute([$hotel_id]);
+                    
+                    // Insert new rooms
+                    $rooms = json_decode($_POST['edit_rooms_json'], true);
+                    if (is_array($rooms) && !empty($rooms)) {
+                        $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, quantity, available) VALUES (?, ?, ?, ?, ?, ?)");
+                        foreach ($rooms as $room) {
+                            if (!empty($room['room_type']) && !empty($room['ac_type']) && !empty($room['price_npr'])) {
+                                $room_stmt->execute([
+                                    $hotel_id,
+                                    $room['room_type'],
+                                    $room['ac_type'],
+                                    $room['price_npr'],
+                                    $room['quantity'] ?? 1,
+                                    $room['available'] ?? 1
+                                ]);
+                            }
+                        }
+                    }
+                }
+                $hotel_success = "Hotel and rooms updated successfully!";
+            } else {
+                $hotel_error = "Error updating hotel!";
+            }
+        } else {
+            $hotel_error = implode(", ", $errors);
+        }
+    }
+    
     // Add Activity
     if (isset($_POST['add_activity'])) {
         $name = trim($_POST['activity_name'] ?? '');
@@ -506,23 +638,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if (empty($errors)) {
             $image_path = '';
-            if (isset($_FILES['activity_image']) && $_FILES['activity_image']['error'] == 0) {
-                $target_dir = "uploads/activities/";
-                if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-                $image_extension = pathinfo($_FILES['activity_image']['name'], PATHINFO_EXTENSION);
-                $image_name = 'activity_' . time() . '.' . $image_extension;
-                $target_file = $target_dir . $image_name;
-                
-                if (move_uploaded_file($_FILES['activity_image']['tmp_name'], $target_file)) {
-                    $image_path = $target_file;
+            if (isset($_FILES['activity_image'])) {
+                $validation_result = validateImageUpload($_FILES['activity_image']);
+                if (!$validation_result['valid']) {
+                    $activity_error = $validation_result['message'];
+                } else {
+                    $target_dir = "uploads/activities/";
+                    if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+                    $image_name = 'activity_' . time() . '.' . $validation_result['extension'];
+                    $target_file = $target_dir . $image_name;
+                    
+                    if (move_uploaded_file($_FILES['activity_image']['tmp_name'], $target_file)) {
+                        $image_path = $target_file;
+                    }
                 }
             }
             
-            $stmt = $pdo->prepare("INSERT INTO activities (name, description, image_path, price_npr, status) VALUES (?, ?, ?, ?, ?)");
-            if ($stmt->execute([$name, $description, $image_path, $price_npr, $status])) {
-                $activity_success = "Activity added successfully!";
-            } else {
-                $activity_error = "Error adding activity!";
+            // Only proceed with insert if no validation error
+            if (empty($activity_error)) {
+                $stmt = $pdo->prepare("INSERT INTO activities (name, description, image_path, price_npr, status) VALUES (?, ?, ?, ?, ?)");
+                if ($stmt->execute([$name, $description, $image_path, $price_npr, $status])) {
+                    $activity_success = "Activity added successfully!";
+                } else {
+                    $activity_error = "Error adding activity!";
+                }
             }
         } else {
             $activity_error = implode(", ", $errors);
@@ -720,13 +859,13 @@ try {
     $monthly_bookings = [];
     for ($i = 5; $i >= 0; $i--) {
         $month = date('Y-m', strtotime("-$i months"));
-        $hotel_count = $pdo->query("SELECT COUNT(*) FROM hotel_bookings WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
-        $activity_count = $pdo->query("SELECT COUNT(*) FROM activity_bookings WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
+        $month_hotel_count = $pdo->query("SELECT COUNT(*) FROM hotel_bookings WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
+        $month_activity_count = $pdo->query("SELECT COUNT(*) FROM activity_bookings WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
         $monthly_bookings[] = [
             'month' => date('M Y', strtotime("-$i months")),
-            'hotel' => $hotel_count,
-            'activity' => $activity_count,
-            'total' => $hotel_count + $activity_count
+            'hotel' => $month_hotel_count,
+            'activity' => $month_activity_count,
+            'total' => $month_hotel_count + $month_activity_count
         ];
     }
     
@@ -1854,6 +1993,9 @@ try {
                                         </select>
                                         <input type="hidden" name="update_hotel_status" value="1">
                                     </form>
+                                    <button type="button" class="btn btn-warning btn-sm" onclick="openEditHotelModal(<?php echo $hotel['id']; ?>, '<?php echo htmlspecialchars(addslashes($hotel['name']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($hotel['description'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($hotel['location'] ?? ''), ENT_QUOTES); ?>', '<?php echo $hotel['status']; ?>', '<?php echo $hotel['image_path'] ?? ''; ?>')" style="margin-right: 5px;">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
                                     <form method="POST" style="display: inline;">
                                         <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
                                         <button type="submit" name="delete_hotel" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this hotel?')">Delete</button>
@@ -2353,6 +2495,71 @@ try {
         </div>
     </div>
 
+    <!-- Edit Hotel Modal -->
+    <div id="editHotelModal" class="modal">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>Edit Hotel</h3>
+                <span class="close" onclick="closeModal('editHotelModal')">&times;</span>
+            </div>
+            <form method="POST" enctype="multipart/form-data" id="editHotelForm">
+                <input type="hidden" name="edit_hotel" value="1">
+                <input type="hidden" name="hotel_id" id="edit_hotel_id">
+                <div class="form-group">
+                    <label for="edit_hotel_name">Hotel Name *</label>
+                    <input type="text" id="edit_hotel_name" name="hotel_name" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Hotel name must be 3-100 characters"
+                           required>
+                    <div id="edit_hotel_name_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_hotel_description">Description</label>
+                    <textarea id="edit_hotel_description" name="hotel_description" class="form-control" rows="4" 
+                              maxlength="1000"
+                              title="Description must be maximum 1000 characters"></textarea>
+                    <div id="edit_hotel_description_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_hotel_location">Location *</label>
+                    <input type="text" id="edit_hotel_location" name="hotel_location" class="form-control" 
+                           pattern="^[a-zA-Z0-9\s,\-]{3,100}$" 
+                           title="Location must be 3-100 characters (letters, numbers, spaces, commas, hyphens)"
+                           required>
+                    <div id="edit_hotel_location_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_hotel_image">Hotel Image (Leave empty to keep current image)</label>
+                    <div id="current_hotel_image_container" style="margin-bottom: 10px;">
+                        <img id="current_hotel_image" src="" alt="Current Image" style="max-width: 200px; max-height: 150px; border-radius: 0.3rem; display: none;">
+                        <p id="no_current_image" style="color: #666; font-style: italic; display: none;">No current image</p>
+                    </div>
+                    <input type="file" id="edit_hotel_image" name="hotel_image" class="form-control" accept="image/*" onchange="previewImage(this, 'editHotelPreview')">
+                    <img id="editHotelPreview" class="image-preview" src="#" alt="New Image Preview">
+                </div>
+                <div class="form-group">
+                    <label for="edit_hotel_status">Status</label>
+                    <select id="edit_hotel_status" name="hotel_status" class="form-control" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="form-group" style="border: 1px solid #e0e0e0; border-radius: 0.5rem; padding: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <h4 style="margin: 0;">Hotel Rooms</h4>
+                        <button type="button" class="btn btn-secondary" onclick="addEditRoomBlock()">Add Room</button>
+                    </div>
+                    <p style="color:#666; margin:0.5rem 0 1rem;">Edit room types with AC/Non-AC options and prices in NPR.</p>
+                    <div id="editRoomBlocksContainer" style="max-height: 300px; overflow-y: auto; display: grid; gap: 1rem;">
+                        <p id="loadingRooms" style="color: #666; font-style: italic;">Loading rooms...</p>
+                    </div>
+                </div>
+                <input type="hidden" name="edit_rooms_json" id="edit_rooms_json">
+                <button type="submit" class="btn btn-primary">Update Hotel</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Destination Modal -->
     <div id="destinationModal" class="modal">
         <div class="modal-content">
@@ -2498,6 +2705,161 @@ try {
             } else {
                 preview.style.display = 'none';
             }
+        }
+        
+        // Open Edit Hotel Modal and populate with data
+        function openEditHotelModal(id, name, description, location, status, imagePath) {
+            // Set form values
+            document.getElementById('edit_hotel_id').value = id;
+            document.getElementById('edit_hotel_name').value = name;
+            document.getElementById('edit_hotel_description').value = description;
+            document.getElementById('edit_hotel_location').value = location;
+            document.getElementById('edit_hotel_status').value = status;
+            
+            // Show current image
+            const currentImageEl = document.getElementById('current_hotel_image');
+            const noImageEl = document.getElementById('no_current_image');
+            if (imagePath && imagePath !== '') {
+                currentImageEl.src = imagePath;
+                currentImageEl.style.display = 'block';
+                noImageEl.style.display = 'none';
+            } else {
+                currentImageEl.style.display = 'none';
+                noImageEl.style.display = 'block';
+            }
+            
+            // Reset new image preview
+            document.getElementById('editHotelPreview').style.display = 'none';
+            document.getElementById('edit_hotel_image').value = '';
+            
+            // Load rooms for this hotel
+            loadHotelRooms(id);
+            
+            // Open modal
+            document.getElementById('editHotelModal').style.display = 'flex';
+        }
+        
+        // Load hotel rooms for editing
+        let editRoomBlockCounter = 0;
+        
+        function loadHotelRooms(hotelId) {
+            const container = document.getElementById('editRoomBlocksContainer');
+            container.innerHTML = '<p style="color: #666; font-style: italic;">Loading rooms...</p>';
+            editRoomBlockCounter = 0;
+            
+            fetch('get_hotel_rooms.php?hotel_id=' + hotelId)
+                .then(response => response.json())
+                .then(data => {
+                    container.innerHTML = '';
+                    if (data.success && data.rooms.length > 0) {
+                        data.rooms.forEach(room => {
+                            addEditRoomBlockWithData(room.room_type, room.ac_type, room.price_npr);
+                        });
+                    } else {
+                        container.innerHTML = '<p style="color: #666; font-style: italic;">No rooms added yet. Click "Add Room" to add rooms.</p>';
+                    }
+                    updateEditRoomsJson();
+                })
+                .catch(error => {
+                    console.error('Error loading rooms:', error);
+                    container.innerHTML = '<p style="color: #dc3545;">Error loading rooms. Please try again.</p>';
+                });
+        }
+        
+        // Add a room block with existing data for editing
+        function addEditRoomBlockWithData(roomType, acType, priceNpr) {
+            editRoomBlockCounter++;
+            const container = document.getElementById('editRoomBlocksContainer');
+            
+            // Remove "no rooms" message if present
+            const noRoomsMsg = container.querySelector('p');
+            if (noRoomsMsg) noRoomsMsg.remove();
+            
+            const roomBlock = document.createElement('div');
+            roomBlock.id = 'editRoomBlock_' + editRoomBlockCounter;
+            roomBlock.style.border = '1px solid #e0e0e0';
+            roomBlock.style.borderRadius = '0.5rem';
+            roomBlock.style.padding = '1rem';
+            roomBlock.style.backgroundColor = '#f9f9f9';
+            roomBlock.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Room Type *</label>
+                        <input type="text" class="form-control edit-room-type" placeholder="e.g., Deluxe, Standard" 
+                               pattern="^.{2,50}$" 
+                               title="Room type must be 2-50 characters"
+                               value="${roomType || ''}"
+                               required>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">AC Type *</label>
+                        <select class="form-control edit-ac-type" required>
+                            <option value="">Select</option>
+                            <option value="AC" ${acType === 'AC' ? 'selected' : ''}>AC</option>
+                            <option value="Non-AC" ${acType === 'Non-AC' ? 'selected' : ''}>Non-AC</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Price (NPR) *</label>
+                        <input type="number" class="form-control edit-room-price" step="0.01" min="1" max="9999999.99" 
+                               placeholder="0.00" 
+                               title="Price must be between NPR 1 and 9,999,999.99"
+                               value="${priceNpr || ''}"
+                               required>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeEditRoomBlock('editRoomBlock_${editRoomBlockCounter}')">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(roomBlock);
+            
+            // Add change listeners
+            roomBlock.querySelector('.edit-room-type').addEventListener('input', updateEditRoomsJson);
+            roomBlock.querySelector('.edit-ac-type').addEventListener('change', updateEditRoomsJson);
+            roomBlock.querySelector('.edit-room-price').addEventListener('input', updateEditRoomsJson);
+        }
+        
+        // Add empty room block for editing
+        function addEditRoomBlock() {
+            addEditRoomBlockWithData('', '', '');
+            updateEditRoomsJson();
+        }
+        
+        // Remove room block from edit modal
+        function removeEditRoomBlock(blockId) {
+            document.getElementById(blockId).remove();
+            updateEditRoomsJson();
+            
+            // Show "no rooms" message if container is empty
+            const container = document.getElementById('editRoomBlocksContainer');
+            if (container.children.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-style: italic;">No rooms. Click "Add Room" to add rooms.</p>';
+            }
+        }
+        
+        // Update hidden JSON field with room data for edit form
+        function updateEditRoomsJson() {
+            const container = document.getElementById('editRoomBlocksContainer');
+            const roomBlocks = container.querySelectorAll('[id^="editRoomBlock_"]');
+            const rooms = [];
+            
+            roomBlocks.forEach(block => {
+                const roomType = block.querySelector('.edit-room-type').value.trim();
+                const acType = block.querySelector('.edit-ac-type').value;
+                const price = block.querySelector('.edit-room-price').value;
+                
+                if (roomType && acType && price) {
+                    rooms.push({
+                        room_type: roomType,
+                        ac_type: acType,
+                        price_npr: parseFloat(price),
+                        available: 1
+                    });
+                }
+            });
+            
+            document.getElementById('edit_rooms_json').value = JSON.stringify(rooms);
         }
         
         // Preview multiple images
@@ -2808,7 +3170,7 @@ try {
             // Initialize real-time validation for all forms
         document.addEventListener('DOMContentLoaded', function() {
             // Real-time validation on input/change
-            const forms = ['offerForm', 'itineraryForm', 'hotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm'];
+            const forms = ['offerForm', 'itineraryForm', 'hotelForm', 'editHotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm'];
             forms.forEach(formId => {
                 const form = document.getElementById(formId);
                 if (form) {
@@ -2949,7 +3311,7 @@ try {
             roomBlock.style.padding = '1rem';
             roomBlock.style.backgroundColor = '#f9f9f9';
             roomBlock.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 100px auto; gap: 1rem; align-items: end;">
                     <div>
                         <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Room Type *</label>
                         <input type="text" class="form-control room-type" placeholder="e.g., Deluxe, Standard" 
@@ -2976,6 +3338,14 @@ try {
                         <div class="field-error room-price-error-${roomBlockCounter}" style="display: none;"></div>
                     </div>
                     <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Quantity *</label>
+                        <input type="number" class="form-control room-quantity" min="1" max="999" 
+                               placeholder="1" 
+                               title="Number of rooms available"
+                               required value="1">
+                        <div class="field-error room-quantity-error-${roomBlockCounter}" style="display: none;"></div>
+                    </div>
+                    <div>
                         <button type="button" class="btn btn-danger btn-sm" onclick="removeRoomBlock('roomBlock_${roomBlockCounter}')">Remove</button>
                     </div>
                 </div>
@@ -2986,6 +3356,7 @@ try {
             const roomTypeInput = roomBlock.querySelector('.room-type');
             const acTypeSelect = roomBlock.querySelector('.ac-type');
             const roomPriceInput = roomBlock.querySelector('.room-price');
+            const roomQuantityInput = roomBlock.querySelector('.room-quantity');
             
             roomTypeInput.addEventListener('input', function() {
                 validateRoomField(this, 'room-type-error-' + roomBlockCounter);
@@ -3006,6 +3377,14 @@ try {
             });
             roomPriceInput.addEventListener('blur', function() {
                 validateRoomField(this, 'room-price-error-' + roomBlockCounter);
+            });
+
+            roomQuantityInput.addEventListener('input', function() {
+                validateRoomField(this, 'room-quantity-error-' + roomBlockCounter);
+                updateHotelRoomsJson();
+            });
+            roomQuantityInput.addEventListener('blur', function() {
+                validateRoomField(this, 'room-quantity-error-' + roomBlockCounter);
             });
             
             updateHotelRoomsJson();
@@ -3079,12 +3458,14 @@ try {
                 const roomType = block.querySelector('.room-type').value.trim();
                 const acType = block.querySelector('.ac-type').value;
                 const price = block.querySelector('.room-price').value;
+                const quantity = block.querySelector('.room-quantity').value;
                 
-                if (roomType && acType && price) {
+                if (roomType && acType && price && quantity) {
                     rooms.push({
                         room_type: roomType,
                         ac_type: acType,
                         price_npr: parseFloat(price),
+                        quantity: parseInt(quantity),
                         available: 1
                     });
                 }

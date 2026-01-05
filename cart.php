@@ -343,7 +343,7 @@ foreach ($cart_items as $item) {
             <li><a href="Tourism.php#special-offers">Special Offers</a></li>
             <li><a href="Tourism.php#itenary">Itinerary</a></li>
             <li><a href="destination.php">Destinations</a></li>
-            <li><a href="Tourism.php#about-us">About Us</a></li>
+            <li><a href="bookings.php">Bookings</a></li>
             <li><a href="Tourism.php#contact">Contact</a></li>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <li class="user-menu">

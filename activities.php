@@ -16,12 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['book_activity'])) {
         $guest_name = trim($_POST['guest_name']);
         $guest_email = trim($_POST['guest_email']);
         $guest_phone = trim($_POST['guest_phone']);
+        $quantity = intval($_POST['quantity'] ?? 1);
         
         // Validation
         if (empty($guest_name) || empty($guest_email) || empty($guest_phone)) {
             $booking_error = "Please fill all guest information fields.";
         } elseif (!filter_var($guest_email, FILTER_VALIDATE_EMAIL)) {
             $booking_error = "Please enter a valid email address.";
+        } elseif ($quantity < 1) {
+            $booking_error = "Please select at least 1 ticket.";
         } else {
             // Get activity price
             $activity_stmt = $pdo->prepare("SELECT price_npr FROM activities WHERE id = ? AND status = 'active'");
@@ -29,11 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['book_activity'])) {
             $activity = $activity_stmt->fetch();
             
             if ($activity) {
-                $total_price = $activity['price_npr'];
+                $total_price = $activity['price_npr'] * $quantity;
                 
                 // Create booking
-                $stmt = $pdo->prepare("INSERT INTO activity_bookings (user_id, activity_id, booking_date, guest_name, guest_email, guest_phone, total_price_npr, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')");
-                if ($stmt->execute([$user_id, $activity_id, $booking_date, $guest_name, $guest_email, $guest_phone, $total_price])) {
+                $stmt = $pdo->prepare("INSERT INTO activity_bookings (user_id, activity_id, booking_date, guest_name, guest_email, guest_phone, total_price_npr, quantity, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+                if ($stmt->execute([$user_id, $activity_id, $booking_date, $guest_name, $guest_email, $guest_phone, $total_price, $quantity])) {
                     $booking_success = "Booking request submitted successfully! Admin will review and approve your booking.";
                 } else {
                     $booking_error = "Error submitting booking. Please try again.";
@@ -50,6 +53,60 @@ try {
     $activities = $pdo->query("SELECT * FROM activities WHERE status = 'active' ORDER BY created_at DESC")->fetchAll();
 } catch (PDOException $e) {
     $activities = [];
+}
+
+// Handle server-side search with binary search
+if (isset($_GET['q']) && $_GET['q'] !== '') {
+    $search_key = strtolower(trim($_GET['q']));
+    
+    // Sort activities by name for binary search
+    usort($activities, function ($a, $b) {
+        return strcmp(strtolower($a['name']), strtolower($b['name']));
+    });
+    
+    // Binary search function
+    function binarySearchActivities($arr, $key) {
+        $low = 0;
+        $high = count($arr) - 1;
+        $results = [];
+        
+        while ($low <= $high) {
+            $mid = floor(($low + $high) / 2);
+            $name = strtolower($arr[$mid]['name']);
+            
+            if (strpos($name, $key) !== false) {
+                $results[] = $arr[$mid];
+                
+                // Left neighbors
+                $i = $mid - 1;
+                while ($i >= 0 && strpos(strtolower($arr[$i]['name']), $key) !== false) {
+                    $results[] = $arr[$i--];
+                }
+                
+                // Right neighbors
+                $i = $mid + 1;
+                while ($i < count($arr) && strpos(strtolower($arr[$i]['name']), $key) !== false) {
+                    $results[] = $arr[$i++];
+                }
+                break;
+            }
+            elseif ($key < $name) {
+                $high = $mid - 1;
+            } else {
+                $low = $mid + 1;
+            }
+        }
+        
+        // Sort matched results
+        usort($results, function ($a, $b) {
+            return strcmp(strtolower($a['name']), strtolower($b['name']));
+        });
+        
+        return $results;
+    }
+    
+    // Perform search
+    $activities = binarySearchActivities($activities, $search_key);
 }
 ?>
 <!DOCTYPE html>
@@ -187,6 +244,52 @@ try {
         .form-group select.error {
             border-color: #dc3545;
         }
+        
+        .search-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 0.8rem 1rem;
+            border: 2px solid #031881;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            box-shadow: 0 0 0 3px rgba(3, 24, 129, 0.1);
+        }
+        
+        .search-button {
+            padding: 0.8rem 2rem;
+            background: linear-gradient(90deg, #031881, #6f7ecb);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .search-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #666;
+            font-size: 1.1rem;
+        }
     </style>
 </head>
 <body>
@@ -207,7 +310,7 @@ try {
             <li><a href="destination.php">Destinations</a></li>
             <!-- <li><a href="hotels.php">Hotels</a></li>
             <li><a href="activities.php" class="active">Activities</a></li> -->
-            <li><a href="Tourism.php#about-us">About Us</a></li>
+            <li><a href="dashboard.php?tab=bookings">Bookings</a></li>
             <li><a href="Tourism.php#contact">Contact</a></li>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <li class="user-menu">
@@ -233,33 +336,43 @@ try {
             <div class="alert alert-error"><?php echo $booking_error; ?></div>
         <?php endif; ?>
         
-        <?php if (empty($activities)): ?>
-            <p style="text-align: center; padding: 4rem;">No activities available at this time.</p>
-        <?php else: ?>
-            <div class="activities-grid">
+        <!-- Search Bar -->
+        <div class="search-container">
+            <form method="GET" style="display: flex; gap: 0.5rem; width: 100%;">
+                <input type="text" name="q" class="search-input" placeholder="Search activities by name or description..." value="<?php echo isset($_GET['q']) ? htmlspecialchars($_GET['q']) : ''; ?>">
+                <button type="submit" class="search-button"><i class="fas fa-search"></i> Search</button>
+            </form>
+        </div>
+        
+        <div class="activities-grid">
+            <?php if (empty($activities)): ?>
+                <p style="text-align: center; padding: 4rem; grid-column: 1/-1;">No activities found.</p>
+            <?php else: ?>
                 <?php foreach ($activities as $activity): ?>
                     <div class="activity-card">
                         <?php if (!empty($activity['image_path'])): ?>
-                            <img src="<?php echo $activity['image_path']; ?>" alt="<?php echo htmlspecialchars($activity['name']); ?>" class="activity-image">
+                            <img src="<?php echo htmlspecialchars($activity['image_path']); ?>" alt="<?php echo htmlspecialchars($activity['name']); ?>" class="activity-image">
                         <?php endif; ?>
                         <div class="activity-info">
                             <h3><?php echo htmlspecialchars($activity['name']); ?></h3>
                             <?php if (!empty($activity['description'])): ?>
-                                <p style="color: #666; margin-bottom: 1rem;"><?php echo htmlspecialchars(substr($activity['description'], 0, 150)) . '...'; ?></p>
+                                <p style="color: #666; margin-bottom: 1rem;"><?php echo htmlspecialchars(substr($activity['description'], 0, 150)); ?>...</p>
                             <?php endif; ?>
                             <div class="activity-price">NPR <?php echo number_format($activity['price_npr'], 2); ?></div>
-                            <?php if (isset($_SESSION['user_id'])): ?>
+                            <?php if (isset($_SESSION['user_id']) && $_SESSION['user_role'] !== 'admin'): ?>
                                 <button class="book-btn" onclick="openBookingModal(<?php echo $activity['id']; ?>, '<?php echo htmlspecialchars(addslashes($activity['name'])); ?>', <?php echo $activity['price_npr']; ?>)">
                                     Book Now
                                 </button>
+                            <?php elseif (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'admin'): ?>
+                                <button class="book-btn" style="background: #999; cursor: not-allowed; opacity: 0.6;" disabled>Not Available</button>
                             <?php else: ?>
                                 <a href="login.php" class="book-btn" style="text-decoration: none; display: block; text-align: center;">Login to Book</a>
                             <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Booking Modal -->
@@ -274,6 +387,15 @@ try {
                 <input type="hidden" name="activity_id" id="booking_activity_id">
                 
                 <div id="activityInfo" style="background: #f9f9f9; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;"></div>
+                
+                <div class="form-group">
+                    <label>Number of Tickets *</label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <button type="button" onclick="decreaseQuantity()" style="padding: 0.5rem 1rem; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 0.3rem; font-weight: 600;">−</button>
+                        <input type="number" id="quantity" name="quantity" min="1" value="1" style="width: 70px; text-align: center; padding: 0.8rem; border: 1px solid #ccc; border-radius: 0.3rem; font-weight: 600;">
+                        <button type="button" onclick="increaseQuantity()" style="padding: 0.5rem 1rem; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 0.3rem; font-weight: 600;">+</button>
+                    </div>
+                </div>
                 
                 <div class="form-group">
                     <label>Booking Date *</label>
@@ -319,16 +441,48 @@ try {
     <script>
         function openBookingModal(activityId, activityName, price) {
             document.getElementById('booking_activity_id').value = activityId;
+            document.getElementById('quantity').value = 1;
             document.getElementById('activityInfo').innerHTML = `
                 <strong>${activityName}</strong><br>
-                <span style="color: #666;">NPR ${price.toFixed(2)}</span>
+                <span style="color: #666;">NPR ${price.toFixed(2)} per ticket</span>
             `;
-            document.getElementById('totalPrice').textContent = `Total: NPR ${price.toFixed(2)}`;
+            calculateActivityTotal(price);
             document.getElementById('bookingModal').style.display = 'flex';
         }
         
         function closeBookingModal() {
             document.getElementById('bookingModal').style.display = 'none';
+        }
+        
+        function increaseQuantity() {
+            const qtyInput = document.getElementById('quantity');
+            const currentQty = parseInt(qtyInput.value) || 1;
+            qtyInput.value = currentQty + 1;
+            updateActivityPrice();
+        }
+        
+        function decreaseQuantity() {
+            const qtyInput = document.getElementById('quantity');
+            const currentQty = parseInt(qtyInput.value) || 1;
+            if (currentQty > 1) {
+                qtyInput.value = currentQty - 1;
+                updateActivityPrice();
+            }
+        }
+        
+        function updateActivityPrice() {
+            const activityInfo = document.getElementById('activityInfo').textContent;
+            const priceMatch = activityInfo.match(/NPR ([\d.]+)/);
+            if (priceMatch) {
+                const pricePerTicket = parseFloat(priceMatch[1]);
+                calculateActivityTotal(pricePerTicket);
+            }
+        }
+        
+        function calculateActivityTotal(pricePerTicket) {
+            const quantity = parseInt(document.getElementById('quantity').value) || 1;
+            const total = pricePerTicket * quantity;
+            document.getElementById('totalPrice').textContent = `Total: NPR ${total.toFixed(2)} (${quantity} ticket${quantity > 1 ? 's' : ''})`;
         }
         
         // Validation functions
@@ -432,6 +586,13 @@ try {
         // Real-time validation
         document.getElementById('booking_date')?.addEventListener('change', function() {
             validateBookingField(this);
+        });
+        
+        document.getElementById('quantity')?.addEventListener('change', function() {
+            let qty = parseInt(this.value) || 1;
+            if (qty < 1) qty = 1;
+            this.value = qty;
+            updateActivityPrice();
         });
         
         document.getElementById('guest_name')?.addEventListener('input', function() {

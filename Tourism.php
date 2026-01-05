@@ -36,7 +36,9 @@ session_start();
         <li><a href="#special-offers">Special Offers</a></li>
         <li><a href="#itenary">Itinerary</a></li>
         <li><a href="destination.php">Destinations</a></li>
-        <li><a href="#about-us">About Us</a></li>
+        <?php if (isset($_SESSION['user_id'])): ?>
+            <li><a href="bookings.php">Bookings</a></li>
+        <?php endif; ?>
         <li><a href="#contact">Contact</a></li>
         <?php if (isset($_SESSION['user_id'])): ?>
             <li class="user-menu">
