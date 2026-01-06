@@ -278,6 +278,16 @@ nav,
     display: block;
 }
 
+.section-subtitle {
+    font-size: 1.2rem;
+    color: #666;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto 2rem;
+    line-height: 1.8;
+    display: block;
+}
+
 .offers-container {
     display: flex;
     justify-content: center;
@@ -327,6 +337,13 @@ nav,
 .about-content {
     max-width: 900px;
     margin: 0 auto;
+}
+
+.about-logo {
+    width: 150px;
+    height: auto;
+    display: block;
+    margin: 0 auto 2rem;
 }
 
 .about-text {

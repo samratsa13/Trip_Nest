@@ -137,6 +137,7 @@ $conn->close();
             padding: 2rem;
             border-radius: 1.5rem;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
         
         .header {
@@ -184,6 +185,7 @@ $conn->close();
             margin-bottom: 0.5rem;
             font-weight: 600;
             color: #333;
+            text-align: center;
         }
         
         input, textarea {
@@ -192,6 +194,7 @@ $conn->close();
             border-radius: 0.5rem;
             font-size: 1rem;
             transition: all 0.3s ease;
+            text-align: center;
         }
         
         input:focus, textarea:focus {

@@ -35,7 +35,7 @@ session_start();
             
             if ($response && isset($response['status']) && $response['status'] == 'COMPLETE') {
                 $status = "success";
-                $msg = "Payment Successful! Your booking has been confirmed.";
+                $msg = "Payment Successful! Your booking is pending approval.";
                 
                 // Update Database
                 $uuid = $response['transaction_uuid'];
@@ -47,9 +47,9 @@ session_start();
                     $conn = mysqli_connect("localhost", "root", "", "tripnest_db");
                     if ($conn) {
                         if ($type == 'room') {
-                            $sql = "UPDATE hotel_bookings SET status = 'approved' WHERE id = $id";
+                            $sql = "UPDATE hotel_bookings SET status = 'pending' WHERE id = $id";
                         } else {
-                            $sql = "UPDATE activity_bookings SET status = 'approved' WHERE id = $id";
+                            $sql = "UPDATE activity_bookings SET status = 'pending' WHERE id = $id";
                         }
                         mysqli_query($conn, $sql);
                         

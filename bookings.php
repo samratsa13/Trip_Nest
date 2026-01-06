@@ -127,6 +127,64 @@ try {
 } catch (Exception $e) {
     $approved_activity_bookings = [];
 }
+
+// Get user's rejected hotel bookings
+try {
+    $rejected_hotel_stmt = $pdo->prepare("
+        SELECT 
+            hb.id,
+            hb.hotel_id,
+            h.name as hotel_name,
+            h.location,
+            hb.room_id,
+            r.room_type,
+            r.ac_type,
+            hb.check_in,
+            hb.check_out,
+            hb.guest_name,
+            hb.guest_email,
+            hb.guest_phone,
+            hb.total_price_npr,
+            hb.status,
+            hb.created_at
+        FROM hotel_bookings hb
+        JOIN hotels h ON hb.hotel_id = h.id
+        LEFT JOIN hotel_rooms r ON hb.room_id = r.id
+        WHERE hb.user_id = ? AND hb.status = 'rejected'
+        ORDER BY hb.created_at DESC
+    ");
+    $rejected_hotel_stmt->execute([$user_id]);
+    $rejected_hotel_bookings = $rejected_hotel_stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $rejected_hotel_bookings = [];
+}
+
+// Get user's rejected activity bookings
+try {
+    $rejected_activity_stmt = $pdo->prepare("
+        SELECT 
+            ab.id,
+            ab.activity_id,
+            a.name as activity_name,
+            a.description,
+            ab.booking_date,
+            ab.guest_name,
+            ab.guest_email,
+            ab.guest_phone,
+            ab.quantity,
+            ab.total_price_npr,
+            ab.status,
+            ab.created_at
+        FROM activity_bookings ab
+        JOIN activities a ON ab.activity_id = a.id
+        WHERE ab.user_id = ? AND ab.status = 'rejected'
+        ORDER BY ab.created_at DESC
+    ");
+    $rejected_activity_stmt->execute([$user_id]);
+    $rejected_activity_bookings = $rejected_activity_stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $rejected_activity_bookings = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -149,43 +207,64 @@ try {
             padding: 20px;
         }
 
-        .navbar {
-            background: linear-gradient(90deg, #031881, #6f7ecb);
-            color: white;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 0.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+       nav,
+.navbar {
+    background: linear-gradient(90deg, #031881, #6f7ecb);
+    color: white;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 0.5rem;
+    margin: 20px auto 2rem;
+    max-width: 1200px;
+    /* Constraint width */
+    width: 95%;
+    /* Responsive width */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 20px;
+    z-index: 1000;
+}
 
-        .navbar h1 {
-            font-size: 1.8rem;
-            font-weight: 700;
-        }
+.logo {
+    color: white;
+    font-size: 1.8rem;
+    font-weight: 700;
+    text-decoration: none;
+}
 
-        .navbar-links {
-            display: flex;
-            gap: 1.5rem;
-        }
+.nav-links {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
 
-        .navbar-links a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.3rem;
-            transition: all 0.3s ease;
-        }
+.nav-links a {
+    color: white;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.3rem;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 
-        .navbar-links a:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-        }
+.nav-links a:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    color: white;
+}
+
+/* Remove old complex hover effects from previous CSS */
+.nav-links a::after,
+.nav-links a::before {
+    display: none;
+}
 
         .container {
             max-width: 1200px;
@@ -457,14 +536,27 @@ try {
 <body>
     <!-- Navigation -->
     <nav class="navbar">
-        <h1>Trip Nest</h1>
-        <div class="navbar-links">
-            <a href="Tourism.php"><i class="fas fa-home"></i> Home</a>
-            <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
+    <h1 class="logo">Trip Nest</h1>
+    <div class="nav-links">
+        <a href="Tourism.php">Home</a>
+        <a href="Tourism.php#itenary">Itinerary</a>
+        <a href="destination.php">Destinations</a>
+        <a href="Tourism.php#contact">Contact</a>
+        <?php if (isset($_SESSION['user_id'])): ?>
+            <a href="bookings.php">Bookings</a>
             <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
-    </nav>
+            <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
+            <!-- <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a> -->
+        <?php else: ?>
+            <a href="login.php">Join Us</a>
+        <?php endif; ?>
+    </div>
+    <div class="menu-btn">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+</nav>
 
     <div class="container">
         <!-- Header -->
@@ -480,6 +572,9 @@ try {
             </button>
             <button class="tab-button" onclick="switchTab(event, 'approved')">
                 <i class="fas fa-check-circle"></i> Approved Bookings
+            </button>
+            <button class="tab-button" onclick="switchTab(event, 'rejected')">
+                <i class="fas fa-times-circle"></i> Rejected Bookings
             </button>
         </div>
 
@@ -796,6 +891,150 @@ try {
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">Confirmed Date</div>
+                                <div class="detail-value">
+                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y H:i', strtotime($booking['created_at'])); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="total-price">
+                                NPR <?php echo number_format($booking['total_price_npr'], 2); ?>
+                            </div>
+                            <div class="button-group">
+                                <a href="activities.php" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Rejected Bookings Tab -->
+        <div id="rejected" class="tab-content">
+            <div class="info-message" style="background: #f8d7da; color: #721c24; border-left-color: #dc3545;">
+                <i class="fas fa-times-circle"></i>
+                These bookings have been rejected by admin. Please contact support or try booking again.
+            </div>
+
+            <!-- Rejected Hotel Bookings -->
+            <h3 style="color: #031881; margin: 2rem 0 1rem; font-size: 1.3rem;">
+                <i class="fas fa-hotel"></i> Hotel Bookings
+            </h3>
+            
+            <?php if (empty($rejected_hotel_bookings)): ?>
+                <div class="empty-state">
+                    <i class="fas fa-bed"></i>
+                    <h3>No Rejected Hotel Bookings</h3>
+                    <p>You don't have any rejected hotel bookings.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach($rejected_hotel_bookings as $booking): ?>
+                    <div class="booking-card rejected">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fas fa-hotel"></i> <?php echo htmlspecialchars($booking['hotel_name']); ?>
+                            </div>
+                            <span class="status-badge rejected">
+                                <i class="fas fa-times-circle"></i> Rejected
+                            </span>
+                        </div>
+
+                        <div class="card-details">
+                            <div class="detail-item">
+                                <div class="detail-label">Location</div>
+                                <div class="detail-value">
+                                    <i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($booking['location']); ?>
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Room Type</div>
+                                <div class="detail-value">
+                                    <?php echo htmlspecialchars($booking['room_type'] . ' (' . $booking['ac_type'] . ')'); ?>
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Check-in</div>
+                                <div class="detail-value">
+                                    <i class="fas fa-calendar-check"></i> <?php echo date('M d, Y', strtotime($booking['check_in'])); ?>
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Check-out</div>
+                                <div class="detail-value">
+                                    <i class="fas fa-calendar-times"></i> <?php echo date('M d, Y', strtotime($booking['check_out'])); ?>
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Guest Name</div>
+                                <div class="detail-value"><?php echo htmlspecialchars($booking['guest_name']); ?></div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Booking Date</div>
+                                <div class="detail-value">
+                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y H:i', strtotime($booking['created_at'])); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="total-price">
+                                NPR <?php echo number_format($booking['total_price_npr'], 2); ?>
+                            </div>
+                            <div class="button-group">
+                                <a href="hotels.php" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left"></i> Back
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+            <!-- Rejected Activity Bookings -->
+            <h3 style="color: #031881; margin: 2rem 0 1rem; font-size: 1.3rem;">
+                <i class="fas fa-running"></i> Activity Bookings
+            </h3>
+            
+            <?php if (empty($rejected_activity_bookings)): ?>
+                <div class="empty-state">
+                    <i class="fas fa-activity"></i>
+                    <h3>No Rejected Activity Bookings</h3>
+                    <p>You don't have any rejected activity bookings.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach($rejected_activity_bookings as $booking): ?>
+                    <div class="booking-card rejected">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fas fa-running"></i> <?php echo htmlspecialchars($booking['activity_name']); ?>
+                            </div>
+                            <span class="status-badge rejected">
+                                <i class="fas fa-times-circle"></i> Rejected
+                            </span>
+                        </div>
+
+                        <div class="card-details">
+                            <div class="detail-item">
+                                <div class="detail-label">Description</div>
+                                <div class="detail-value">
+                                    <?php echo htmlspecialchars(substr($booking['description'], 0, 100)); ?>...
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Booking Date</div>
+                                <div class="detail-value">
+                                    <i class="fas fa-calendar-check"></i> <?php echo date('M d, Y', strtotime($booking['booking_date'])); ?>
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Quantity</div>
+                                <div class="detail-value"><?php echo htmlspecialchars($booking['quantity']); ?> ticket(s)</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Booking Date</div>
                                 <div class="detail-value">
                                     <i class="fas fa-calendar"></i> <?php echo date('M d, Y H:i', strtotime($booking['created_at'])); ?>
                                 </div>

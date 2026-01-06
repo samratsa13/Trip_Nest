@@ -59,10 +59,52 @@ try {
 if (isset($_GET['q']) && $_GET['q'] !== '') {
     $search_key = strtolower(trim($_GET['q']));
     
-    // Sort activities by name for binary search
-    usort($activities, function ($a, $b) {
-        return strcmp(strtolower($a['name']), strtolower($b['name']));
-    });
+    /* 
+       MERGE SORT (By Name)
+    */
+    function mergeSortActivities(array $arr): array {
+        $count = count($arr);
+        if ($count <= 1) {
+            return $arr;
+        }
+
+        $mid = intdiv($count, 2);
+        $left = array_slice($arr, 0, $mid);
+        $right = array_slice($arr, $mid);
+
+        return mergeActivities(
+            mergeSortActivities($left),
+            mergeSortActivities($right)
+        );
+    }
+
+    function mergeActivities(array $left, array $right): array {
+        $result = [];
+        $i = $j = 0;
+        $lCount = count($left);
+        $rCount = count($right);
+
+        while ($i < $lCount && $j < $rCount) {
+            if (strcasecmp($left[$i]['name'], $right[$j]['name']) <= 0) {
+                $result[] = $left[$i++];
+            } else {
+                $result[] = $right[$j++];
+            }
+        }
+
+        while ($i < $lCount) {
+            $result[] = $left[$i++];
+        }
+
+        while ($j < $rCount) {
+            $result[] = $right[$j++];
+        }
+
+        return $result;
+    }
+
+    // Sort activities before binary search
+    $activities = mergeSortActivities($activities);
     
     // Binary search function
     function binarySearchActivities($arr, $key) {

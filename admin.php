@@ -580,6 +580,76 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
+    // Edit Activity
+    if (isset($_POST['edit_activity'])) {
+        $id = $_POST['activity_id'];
+        $name = trim($_POST['activity_name'] ?? '');
+        $description = trim($_POST['activity_description'] ?? '');
+        $price_npr = $_POST['activity_price_npr'] ?? 0;
+        $status = $_POST['activity_status'] ?? 'active';
+        
+        // Validation
+        $errors = [];
+        
+        if (empty($name)) {
+            $errors[] = "Activity name is required";
+        } elseif (strlen($name) < 3 || strlen($name) > 100) {
+            $errors[] = "Activity name must be 3-100 characters";
+        }
+        
+        if (!empty($description) && strlen($description) > 1000) {
+            $errors[] = "Description must be maximum 1000 characters";
+        }
+        
+        if (empty($price_npr) || !is_numeric($price_npr)) {
+            $errors[] = "Price is required and must be a valid number";
+        } elseif ($price_npr < 1 || $price_npr > 9999999.99) {
+            $errors[] = "Price must be between NPR 1 and 9,999,999.99";
+        }
+        
+        if (empty($errors)) {
+            $image_path = null;
+            $update_image = false;
+            
+            // Handle image upload if provided
+            if (isset($_FILES['activity_image']) && $_FILES['activity_image']['error'] == 0) {
+                $validation_result = validateImageUpload($_FILES['activity_image']);
+                if (!$validation_result['valid']) {
+                    $activity_error = $validation_result['message'];
+                } else {
+                    $target_dir = "uploads/activities/";
+                    if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
+                    $image_name = 'activity_' . time() . '.' . $validation_result['extension'];
+                    $target_file = $target_dir . $image_name;
+                    
+                    if (move_uploaded_file($_FILES['activity_image']['tmp_name'], $target_file)) {
+                        $image_path = $target_file;
+                        $update_image = true;
+                    }
+                }
+            }
+            
+            // Only proceed with update if no image validation error
+            if (empty($activity_error)) {
+                if ($update_image) {
+                    $stmt = $pdo->prepare("UPDATE activities SET name = ?, description = ?, image_path = ?, price_npr = ?, status = ? WHERE id = ?");
+                    $result = $stmt->execute([$name, $description, $image_path, $price_npr, $status, $id]);
+                } else {
+                    $stmt = $pdo->prepare("UPDATE activities SET name = ?, description = ?, price_npr = ?, status = ? WHERE id = ?");
+                    $result = $stmt->execute([$name, $description, $price_npr, $status, $id]);
+                }
+                
+                if ($result) {
+                    $activity_success = "Activity updated successfully!";
+                } else {
+                    $activity_error = "Error updating activity!";
+                }
+            }
+        } else {
+            $activity_error = implode(", ", $errors);
+        }
+    }
+    
     // Delete Activity
     if (isset($_POST['delete_activity'])) {
         $activity_id = $_POST['activity_id'];
@@ -1093,6 +1163,11 @@ try {
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
             z-index: 2000;
+        }
+        
+        .modal[style*="display: block"],
+        .modal[style*="display: flex"] {
+            display: flex !important;
             align-items: center;
             justify-content: center;
         }
@@ -1303,10 +1378,7 @@ try {
                             <h4 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Total Revenue</h4>
                             <h2 style="margin: 0.5rem 0; font-size: 2rem;">NPR <?php echo number_format($total_revenue, 2); ?></h2>
                         </div>
-                        <!-- <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
-                            <h4 style="margin: 0; color: #666;">Orders Revenue</h4>
-                            <h3 style="margin: 0.5rem 0; color: var(--primary);">NPR <?php echo number_format($total_revenue_orders, 2); ?></h3>
-                        </div> -->
+
                         <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
                             <h4 style="margin: 0; color: #666;">Hotel Bookings</h4>
                             <h3 style="margin: 0.5rem 0; color: var(--secondary);">NPR <?php echo number_format($total_revenue_hotel, 2); ?></h3>
@@ -1750,6 +1822,9 @@ try {
                                         </select>
                                         <input type="hidden" name="update_activity_status" value="1">
                                     </form>
+                                    <button type="button" class="btn btn-warning btn-sm" onclick="openEditActivityModal(<?php echo $activity['id']; ?>, '<?php echo htmlspecialchars(addslashes($activity['name']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($activity['description'] ?? ''), ENT_QUOTES); ?>', '<?php echo $activity['price_npr']; ?>', '<?php echo $activity['status']; ?>', '<?php echo $activity['image_path'] ?? ''; ?>')" style="margin-right: 5px;">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
                                     <form method="POST" style="display: inline;">
                                         <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
                                         <button type="submit" name="delete_activity" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this activity?')">Delete</button>
@@ -2287,6 +2362,60 @@ try {
         </div>
     </div>
 
+    <!-- Edit Activity Modal -->
+    <div id="editActivityModal" class="modal">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>Edit Activity</h3>
+                <span class="close" onclick="closeModal('editActivityModal')">&times;</span>
+            </div>
+            <form method="POST" enctype="multipart/form-data" id="editActivityForm">
+                <input type="hidden" name="edit_activity" value="1">
+                <input type="hidden" name="activity_id" id="edit_activity_id">
+                <div class="form-group">
+                    <label for="edit_activity_name">Activity Name *</label>
+                    <input type="text" id="edit_activity_name" name="activity_name" class="form-control" 
+                           pattern="^.{3,100}$" 
+                           title="Activity name must be 3-100 characters"
+                           required>
+                    <div id="edit_activity_name_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_activity_description">Description</label>
+                    <textarea id="edit_activity_description" name="activity_description" class="form-control" rows="4" 
+                              maxlength="1000"
+                              title="Description must be maximum 1000 characters"></textarea>
+                    <div id="edit_activity_description_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_activity_price_npr">Price (NPR) *</label>
+                    <input type="number" id="edit_activity_price_npr" name="activity_price_npr" class="form-control" 
+                           step="0.01" min="1" max="9999999.99"
+                           title="Price must be between NPR 1 and 9,999,999.99"
+                           required>
+                    <div id="edit_activity_price_npr_error" class="field-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_activity_image">Activity Image (Leave empty to keep current image)</label>
+                    <div id="current_activity_image_container" style="margin-bottom: 10px;">
+                        <img id="current_activity_image" src="" alt="Current Image" style="max-width: 200px; max-height: 150px; border-radius: 0.3rem; display: none;">
+                        <p id="no_current_activity_image" style="color: #666; font-style: italic; display: none;">No current image</p>
+                    </div>
+                    <input type="file" id="edit_activity_image" name="activity_image" class="form-control" accept="image/*" onchange="previewImage(this, 'editActivityPreview')">
+                    <img id="editActivityPreview" class="image-preview" src="#" alt="New Image Preview">
+                </div>
+                <div class="form-group">
+                    <label for="edit_activity_status">Status</label>
+                    <select id="edit_activity_status" name="activity_status" class="form-control" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Update Activity</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Tab functionality
         document.querySelectorAll('.sidebar-menu a').forEach(link => {
@@ -2805,7 +2934,7 @@ try {
             // Initialize real-time validation for all forms
         document.addEventListener('DOMContentLoaded', function() {
             // Real-time validation on input/change
-            const forms = ['itineraryForm', 'hotelForm', 'editHotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm'];
+            const forms = ['itineraryForm', 'hotelForm', 'editHotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm', 'editActivityForm'];
             forms.forEach(formId => {
                 const form = document.getElementById(formId);
                 if (form) {
@@ -3448,51 +3577,7 @@ try {
                 });
             }
             
-            // Monthly Orders Trend Chart
-            const monthlyOrdersCtx = document.getElementById('monthlyOrdersChart');
-            if (monthlyOrdersCtx) {
-                const monthlyOrdersData = <?php echo json_encode($monthly_orders); ?>;
-                new Chart(monthlyOrdersCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: monthlyOrdersData.map(item => item.month),
-                        datasets: [
-                            {
-                                label: 'Number of Orders',
-                                data: monthlyOrdersData.map(item => item.count),
-                                backgroundColor: 'rgba(3, 24, 129, 0.8)',
-                                borderColor: 'rgba(3, 24, 129, 1)',
-                                borderWidth: 2
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return 'Orders: ' + context.parsed.y;
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 1,
-                                    precision: 0
-                                }
-                            }
-                        }
-                    }
-                });
-            }
+
             
             // Revenue Breakdown Chart
             const revenueCtx = document.getElementById('revenueChart');
@@ -3504,17 +3589,14 @@ try {
                         datasets: [{
                             label: 'Revenue (NPR)',
                             data: [
-                                // <?php echo $total_revenue_orders; ?>,
                                 <?php echo $total_revenue_hotel; ?>,
                                 <?php echo $total_revenue_activity; ?>
                             ],
                             backgroundColor: [
-                                // 'rgba(3, 24, 129, 0.8)',
                                 'rgba(111, 126, 203, 0.8)',
                                 'rgba(255, 87, 34, 0.8)'
                             ],
                             borderColor: [
-                                // 'rgba(3, 24, 129, 1)',
                                 'rgba(111, 126, 203, 1)',
                                 'rgba(255, 87, 34, 1)'
                             ],
@@ -3550,6 +3632,143 @@ try {
                 });
             }
         }
+        
+        // Open Edit Activity Modal
+        function openEditActivityModal(id, name, description, price, status, imagePath) {
+            document.getElementById('edit_activity_id').value = id;
+            document.getElementById('edit_activity_name').value = name;
+            document.getElementById('edit_activity_description').value = description;
+            document.getElementById('edit_activity_price_npr').value = price;
+            document.getElementById('edit_activity_status').value = status;
+            
+            // Handle image preview
+            const currentImage = document.getElementById('current_activity_image');
+            const noCurrentImage = document.getElementById('no_current_activity_image');
+            const newImagePreview = document.getElementById('editActivityPreview');
+            const fileInput = document.getElementById('edit_activity_image');
+            
+            // Reset file input
+            fileInput.value = '';
+            newImagePreview.style.display = 'none';
+            newImagePreview.src = '#';
+            
+            if (imagePath) {
+                currentImage.src = imagePath;
+                currentImage.style.display = 'block';
+                noCurrentImage.style.display = 'none';
+            } else {
+                currentImage.style.display = 'none';
+                noCurrentImage.style.display = 'block';
+            }
+            
+            // Clear errors
+            document.querySelectorAll('.field-error').forEach(el => el.textContent = '');
+            
+            // Open Modal - use flex to center it
+            document.getElementById('editActivityModal').style.display = 'flex';
+        }
+        
+        // ✅ Client-side Image Validation Function (matches server-side validation)
+        function validateImageFile(input) {
+            const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+            const files = input.files;
+            
+            if (!files || files.length === 0) {
+                return { valid: true, message: '' }; // No file selected is okay
+            }
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileName = file.name.toLowerCase();
+                const fileExtension = fileName.split('.').pop();
+                
+                // Check if extension is allowed
+                if (!allowedExtensions.includes(fileExtension)) {
+                    return {
+                        valid: false,
+                        message: `❌ Invalid file type: "${file.name}". Only jpg, jpeg, png, and webp are allowed.`
+                    };
+                }
+            }
+            
+            return { valid: true, message: '✅ Valid image file(s)' };
+        }
+        
+        // ✅ Add real-time validation to all file inputs
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get all file inputs with accept="image/*"
+            const fileInputs = document.querySelectorAll('input[type="file"][accept="image/*"]');
+            
+            fileInputs.forEach(function(input) {
+                // Create error message element if it doesn't exist
+                let errorElement = input.nextElementSibling;
+                if (!errorElement || !errorElement.classList.contains('file-error')) {
+                    errorElement = document.createElement('div');
+                    errorElement.className = 'file-error';
+                    errorElement.style.color = 'red';
+                    errorElement.style.fontSize = '0.9rem';
+                    errorElement.style.marginTop = '0.5rem';
+                    input.parentNode.insertBefore(errorElement, input.nextSibling);
+                }
+                
+                // Add change event listener
+                input.addEventListener('change', function() {
+                    const validation = validateImageFile(this);
+                    const errorDiv = this.nextElementSibling;
+                    
+                    if (!validation.valid) {
+                        errorDiv.textContent = validation.message;
+                        errorDiv.style.color = 'red';
+                        this.value = ''; // Clear the invalid file
+                        
+                        // Clear preview if exists
+                        const previewId = this.getAttribute('onchange')?.match(/previewImage.*'([^']+)'/)?.[1] ||
+                                        this.getAttribute('onchange')?.match(/previewMultipleImages.*'([^']+)'/)?.[1];
+                        if (previewId) {
+                            const previewElement = document.getElementById(previewId);
+                            if (previewElement) {
+                                if (previewElement.tagName === 'IMG') {
+                                    previewElement.style.display = 'none';
+                                } else {
+                                    previewElement.innerHTML = '';
+                                }
+                            }
+                        }
+                    } else if (this.files.length > 0) {
+                        errorDiv.textContent = validation.message;
+                        errorDiv.style.color = 'green';
+                    } else {
+                        errorDiv.textContent = '';
+                    }
+                });
+            });
+            
+            // Add form submit validation
+            const forms = document.querySelectorAll('form[enctype="multipart/form-data"]');
+            forms.forEach(function(form) {
+                form.addEventListener('submit', function(e) {
+                    const fileInputs = this.querySelectorAll('input[type="file"][accept="image/*"]');
+                    let hasError = false;
+                    
+                    fileInputs.forEach(function(input) {
+                        if (input.files.length > 0) {
+                            const validation = validateImageFile(input);
+                            if (!validation.valid) {
+                                hasError = true;
+                                alert(validation.message);
+                                e.preventDefault();
+                                input.focus();
+                                return false;
+                            }
+                        }
+                    });
+                    
+                    if (hasError) {
+                        return false;
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>

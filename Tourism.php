@@ -147,7 +147,8 @@ require_once 'db_connection.php';
         <?php endforeach; ?>
     </div>
 </section>
-
+<br>
+<br><br>
     <!-- About Us Section -->
     <section id="about-us">
         <div class="about-content">
@@ -172,12 +173,12 @@ require_once 'db_connection.php';
     <!-- Footer -->
     <section id="footer">
         <div class="footer-content">
-            <div class="social-icons">
+            <!-- <div class="social-icons">
                 <a href="#"><i class="fab fa-facebook-f"></i></a>
                 <a href="#"><i class="fab fa-twitter"></i></a>
                 <a href="#"><i class="fab fa-instagram"></i></a>
                 <a href="#"><i class="fab fa-linkedin-in"></i></a>
-            </div>
+            </div> -->
             <p>&copy; 2024 Trip Nest. All rights reserved.</p>
         </div>
     </section>

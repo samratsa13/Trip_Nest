@@ -81,10 +81,52 @@ try {
 if (isset($_GET['q']) && $_GET['q'] !== '') {
     $search_key = strtolower(trim($_GET['q']));
     
-    // Sort hotels by name for search algorithm
-    usort($hotels, function ($a, $b) {
-        return strcmp(strtolower($a['name']), strtolower($b['name']));
-    });
+    /* 
+       MERGE SORT (By Name)
+    */
+    function mergeSortHotels(array $arr): array {
+        $count = count($arr);
+        if ($count <= 1) {
+            return $arr;
+        }
+
+        $mid = intdiv($count, 2);
+        $left = array_slice($arr, 0, $mid);
+        $right = array_slice($arr, $mid);
+
+        return mergeHotels(
+            mergeSortHotels($left),
+            mergeSortHotels($right)
+        );
+    }
+
+    function mergeHotels(array $left, array $right): array {
+        $result = [];
+        $i = $j = 0;
+        $lCount = count($left);
+        $rCount = count($right);
+
+        while ($i < $lCount && $j < $rCount) {
+            if (strcasecmp($left[$i]['name'], $right[$j]['name']) <= 0) {
+                $result[] = $left[$i++];
+            } else {
+                $result[] = $right[$j++];
+            }
+        }
+
+        while ($i < $lCount) {
+            $result[] = $left[$i++];
+        }
+
+        while ($j < $rCount) {
+            $result[] = $right[$j++];
+        }
+
+        return $result;
+    }
+
+    // Sort hotels before binary search
+    $hotels = mergeSortHotels($hotels);
     
     // Binary search function
     function binarySearchHotels($arr, $key) {

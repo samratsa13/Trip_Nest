@@ -54,9 +54,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $total_price = 0;
     $booking_id = 0;
     
-    // Validation simple
-    if (empty($guest_name) || empty($guest_email) || empty($guest_phone)) {
-        $error_msg = "Please fill all fields.";
+    // Validation
+    $errors = [];
+    if (empty($guest_name)) {
+        $errors[] = "Guest name is required.";
+    } elseif (!preg_match("/^[a-zA-Z][a-zA-Z\s]*$/", $guest_name)) {
+        $errors[] = "Name must start with a letter and contain only letters and spaces (no special symbols like +, /, \\, etc).";
+    }
+    
+    // Strict Email Validation (No +, /, \, " etc allowed)
+    // Allowed: letters, numbers, dot, underscore, dash, @
+    if (!preg_match("/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $guest_email)) {
+        $errors[] = "Email invalid or contains restricted symbols (+, /, \\, \", etc). Only letters, numbers, ., -, _ allowed.";
+    } elseif (preg_match("/^\s/", $guest_email)) {
+        $errors[] = "Email cannot start with a space.";
+    }
+
+    if (!preg_match("/^(97|98)\d{8}$/", $guest_phone)) {
+        $errors[] = "Phone number must start with 97 or 98 and be exactly 10 digits long.";
+    }
+    if ($quantity < 1) {
+        $errors[] = "Quantity must be at least 1.";
+    }
+
+    if (!empty($errors)) {
+        $error_msg = implode("<br>", $errors);
     } else {
         if ($item_type == 'room') {
             $check_in = $_POST['check_in'];
@@ -161,6 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .pay-btn { background: #60bb46; color: white; padding: 1rem 2rem; border: none; border-radius: 0.5rem; font-size: 1.2rem; cursor: pointer; width: 100%; margin-top: 1rem; }
         .pay-btn:hover { background: #4cae32; }
         .error { color: red; margin-bottom: 1rem; }
+        .field-error { color: red; font-size: 0.85rem; margin-top: 0.25rem; display: block; }
     </style>
 </head>
 <body>
@@ -210,22 +233,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 </div>
             </div>
 
-            <form method="POST">
+            <form method="POST" id="bookingForm" onsubmit="return validateForm()">
                 <div class="form-group">
                     <label>Guest Name</label>
-                    <input type="text" name="guest_name" value="<?php echo htmlspecialchars($_SESSION['user_name'] ?? ''); ?>" required>
+                    <input type="text" id="guest_name" name="guest_name" value="<?php echo htmlspecialchars($_SESSION['user_name'] ?? ''); ?>" required>
+                    <small id="name_error" class="field-error"></small>
                 </div>
                 <div class="form-group">
                     <label>Guest Email</label>
-                    <input type="email" name="guest_email" value="<?php echo htmlspecialchars($_SESSION['user_email'] ?? ''); ?>" required>
+                    <input type="email" id="guest_email" name="guest_email" value="<?php echo htmlspecialchars($_SESSION['user_email'] ?? ''); ?>" required>
+                    <small id="email_error" class="field-error"></small>
                 </div>
                 <div class="form-group">
                     <label>Guest Phone</label>
-                    <input type="tel" name="guest_phone" required placeholder="98XXXXXXXX">
+                    <input type="tel" id="guest_phone" name="guest_phone" required placeholder="98XXXXXXXX" maxlength="10">
+                    <small id="phone_error" class="field-error"></small>
                 </div>
                 <div class="form-group">
                     <label>Quantity <?php echo $item_type=='room'?'(Rooms)':'(Tickets)'; ?></label>
                     <input type="number" name="quantity" id="quantity" value="1" min="1" required>
+                    <small id="quantity_error" class="field-error"></small>
                 </div>
 
                 <?php if ($item_type == 'room'): ?>
@@ -255,7 +282,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </select>
                 </div>
 
-                <button type="submit" class="submit-btn">Proceed to Payment</button>
+                <button type="submit" class="submit-btn" id="submitBtn">Proceed to Payment</button>
             </form>
         <?php endif; ?>
     </div>
@@ -264,34 +291,253 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         const price = <?php echo $item['price_npr']; ?>;
         const type = '<?php echo $item_type; ?>';
         
-        function calculate() {
-            const qty = document.getElementById('quantity').value;
-            let total = 0;
+        // Get form elements
+        const phoneInput = document.getElementById('guest_phone');
+        const phoneError = document.getElementById('phone_error');
+        const nameInput = document.getElementById('guest_name');
+        const nameError = document.getElementById('name_error');
+        const emailInput = document.getElementById('guest_email');
+        const emailError = document.getElementById('email_error');
+        const quantityInput = document.getElementById('quantity');
+        const quantityError = document.getElementById('quantity_error');
+
+        // ✅ Enhanced Name Validation (from register.php)
+        if (nameInput) {
+            nameInput.addEventListener('input', function() {
+                const val = this.value;
+                nameError.style.color = "red";
+                
+                if (val.trim() === "") {
+                    nameError.textContent = "❌ Name is required.";
+                    return;
+                }
+                
+                // Check if starts with space
+                if (/^\s/.test(val)) {
+                    nameError.textContent = "❌ Name cannot start with a space.";
+                    return;
+                }
+                
+                // Check for more than two consecutive spaces
+                if (/\s{3,}/.test(val)) {
+                    nameError.textContent = "❌ Name cannot have more than two consecutive spaces.";
+                    return;
+                }
+                
+                // Check for numbers
+                if (/[0-9]/.test(val)) {
+                    nameError.textContent = "❌ Name cannot contain numbers.";
+                    return;
+                }
+                
+                // Check for special characters (except spaces)
+                if (/[^\w\s]/.test(val)) {
+                    nameError.textContent = "❌ Name cannot contain special characters.";
+                    return;
+                }
+                
+                // Check if starts with letter
+                if (!/^[a-zA-Z]/.test(val)) {
+                    nameError.textContent = "❌ Name must start with a letter.";
+                    return;
+                }
+                
+                nameError.textContent = "✅ Valid name";
+                nameError.style.color = "green";
+            });
+        }
+
+        // ✅ Enhanced Email Validation (from register.php)
+        if (emailInput) {
+            emailInput.addEventListener('input', function() {
+                const val = this.value;
+                emailError.style.color = "red";
+                
+                if (val.trim() === "") {
+                    emailError.textContent = "❌ Email is required.";
+                    return;
+                }
+                
+                // Check if starts with letter
+                if (!/^[a-zA-Z]/.test(val)) {
+                    emailError.textContent = "❌ Email must start with a letter.";
+                    return;
+                }
+                
+                // Check for spaces
+                if (/\s/.test(val)) {
+                    emailError.textContent = "❌ Email cannot contain spaces.";
+                    return;
+                }
+                
+                // Check for restricted symbols (+, /, \, ", etc)
+                if (/[+\/\\"']/.test(val)) {
+                    emailError.textContent = "❌ Email cannot contain +, /, \\, or quotes.";
+                    return;
+                }
+                
+                // Check for more than one dot before @
+                const localPart = val.split('@')[0];
+                if (localPart && (localPart.match(/\./g) || []).length > 1) {
+                    emailError.textContent = "❌ Email can only contain one dot before @.";
+                    return;
+                }
+                
+                // Check for valid email format
+                if (!/^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$/.test(val)) {
+                    emailError.textContent = "❌ Email format is invalid.";
+                    return;
+                }
+                
+                emailError.textContent = "✅ Valid email";
+                emailError.style.color = "green";
+            });
+        }
+
+        // ✅ Enhanced Phone Validation (from register.php)
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                // Remove any non-digit characters
+                this.value = this.value.replace(/\D/g, '');
+                
+                const val = this.value;
+                phoneError.style.color = "red";
+                
+                if (val === "") {
+                    phoneError.textContent = "❌ Phone number is required.";
+                    return;
+                }
+                
+                // Check if starts with 97 or 98 and is exactly 10 digits
+                if (!/^(97|98)[0-9]{8}$/.test(val)) {
+                    if (!/^(97|98)/.test(val)) {
+                        phoneError.textContent = "❌ Phone must start with 97 or 98.";
+                    } else {
+                        phoneError.textContent = "❌ Phone must be exactly 10 digits.";
+                    }
+                    return;
+                }
+                
+                phoneError.textContent = "✅ Valid phone number";
+                phoneError.style.color = "green";
+            });
+        }
+
+        // ✅ Quantity Validation
+        if (quantityInput) {
+            quantityInput.addEventListener('input', function() {
+                const val = parseInt(this.value);
+                quantityError.style.color = "red";
+                
+                if (isNaN(val) || val < 1) {
+                    quantityError.textContent = "❌ Quantity must be at least 1.";
+                    return;
+                }
+                
+                quantityError.textContent = "";
+            });
+        }
+
+        // ✅ Enhanced Form Validation (from register.php)
+        function validateForm() {
+            let isValid = true;
+            
+            // Trigger validation for all fields
+            if (nameInput) nameInput.dispatchEvent(new Event('input'));
+            if (emailInput) emailInput.dispatchEvent(new Event('input'));
+            if (phoneInput) phoneInput.dispatchEvent(new Event('input'));
+            if (quantityInput) quantityInput.dispatchEvent(new Event('input'));
+            
+            // Check if any errors exist
+            const errorElements = document.querySelectorAll('.field-error');
+            for (let i = 0; i < errorElements.length; i++) {
+                const errorText = errorElements[i].textContent;
+                if (errorText !== "" && errorText.includes("❌")) {
+                    isValid = false;
+                    break;
+                }
+            }
+            
+            if (!isValid) {
+                // Scroll to first error
+                const firstError = document.querySelector('.field-error:not(:empty)');
+                if (firstError && firstError.textContent.includes("❌")) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return false;
+            }
+            
+            // Additional validation for dates (if room booking)
             if (type === 'room') {
-                const start = document.getElementById('check_in').value;
-                const end = document.getElementById('check_out').value;
-                if (start && end) {
-                    const d1 = new Date(start);
-                    const d2 = new Date(end);
-                    const diffTime = Math.abs(d2 - d1);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                    if (diffDays > 0) {
-                        total = price * diffDays * qty;
+                const checkIn = document.getElementById('check_in');
+                const checkOut = document.getElementById('check_out');
+                
+                if (checkIn && checkOut) {
+                    const startDate = new Date(checkIn.value);
+                    const endDate = new Date(checkOut.value);
+                    
+                    if (endDate <= startDate) {
+                        alert("❌ Check-out date must be after check-in date.");
+                        return false;
+                    }
+                }
+            }
+            
+            return true;
+        }
+
+        // Price Calculation Function
+        function calculate() {
+            const qtyElement = document.getElementById('quantity');
+            if (!qtyElement) return;
+            
+            const qty = qtyElement.value;
+            let total = 0;
+            
+            if (type === 'room') {
+                const startElement = document.getElementById('check_in');
+                const endElement = document.getElementById('check_out');
+                
+                if (startElement && endElement) {
+                    const start = startElement.value;
+                    const end = endElement.value;
+                    
+                    if (start && end) {
+                        const d1 = new Date(start);
+                        const d2 = new Date(end);
+                        const diffTime = d2 - d1;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                        
+                        if (diffDays > 0) {
+                            total = price * diffDays * qty;
+                        } else {
+                            total = 0;
+                        }
                     }
                 }
             } else {
                 total = price * qty;
             }
-            document.getElementById('total_display').innerText = "NPR " + total.toFixed(2);
+            
+            const totalDisplay = document.getElementById('total_display');
+            if (totalDisplay) {
+                totalDisplay.innerText = "NPR " + total.toFixed(2);
+            }
         }
 
+        // Event Listeners for Price Calculation
         if (document.getElementById('quantity')) {
             document.getElementById('quantity').addEventListener('change', calculate);
+            document.getElementById('quantity').addEventListener('input', calculate);
+            
             if (type === 'room') {
                 document.getElementById('check_in').addEventListener('change', calculate);
                 document.getElementById('check_out').addEventListener('change', calculate);
             }
         }
+        
+        // Initial calculation on page load
+        document.addEventListener('DOMContentLoaded', calculate);
     </script>
 </body>
 </html>
