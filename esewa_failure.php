@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Payment Failed - Trip Nest</title>
-    <link rel="stylesheet" href="css.css">
+    <link rel="stylesheet" href="home.css">
     <style>
         .container { max-width: 600px; margin: 100px auto; padding: 2rem; text-align: center; }
         .icon { font-size: 5rem; color: red; margin-bottom: 1rem; }

@@ -7,7 +7,7 @@ session_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payment Success - Trip Nest</title>
-    <link rel="stylesheet" href="css.css">
+    <link rel="stylesheet" href="home.css">
     <style>
         .container { max-width: 600px; margin: 100px auto; padding: 2rem; text-align: center; }
         .success-icon { font-size: 5rem; color: green; margin-bottom: 1rem; }

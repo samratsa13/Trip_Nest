@@ -167,7 +167,7 @@ if (isset($_GET['id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <title>Activities - Trip Nest</title>
-    <link rel="stylesheet" href="css.css">
+    <link rel="stylesheet" href="home.css">
     <style>
         .activities-container {
             max-width: 1200px;
@@ -356,7 +356,6 @@ if (isset($_GET['id'])) {
                 <a href="bookings.php">Bookings</a>
                 <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>
                 <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
-                <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
             <?php else: ?>
                 <a href="login.php">Join Us</a>
             <?php endif; ?>

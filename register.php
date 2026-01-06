@@ -18,6 +18,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
+
+
+    //password hashing gareko algorthmma 
+
+    function generateSalt($length = 16)
+{
+    return bin2hex(random_bytes($length)); // 32 chars for 16 bytes
+}
+
+function customHashPassword($password, $salt = null, $rounds = 500)
+{
+    if (!$salt) {
+        $salt = generateSalt();
+    }
+
+    $combined = $salt . $password;
+
+    // Key stretching for demo
+    $hash = hash('sha256', $combined);
+    for ($i = 0; $i < $rounds; $i++) {
+        $hash = hash('sha256', $hash . $combined);
+    }
+
+    return $salt . ':' . $hash;
+}
     // Validation rules
     // Name validation: Can't start with space, can't have more than two consecutive spaces, no numbers or special chars
     if (empty($name)) {
@@ -103,7 +128,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($check_stmt->num_rows > 0) {
             $errors['email'] = "This email is already registered.";
         } else {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $hashed_password = customHashPassword($password, null, 500);
 
             $stmt = $conn->prepare("INSERT INTO users (name, dob, address, phone, email, password) 
                                     VALUES (?, ?, ?, ?, ?, ?)");

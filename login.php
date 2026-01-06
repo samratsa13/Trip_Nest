@@ -22,6 +22,32 @@ $password_error = "";
 $EMAIL_PATTERN = '/^[^\s@]+@[^\s@]+\.[^\s@]+$/';
 $PASSWORD_PATTERN = '/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$/';
 
+
+
+// password hashing gareko with sha256
+/* CUSTOM PASSWORD VERIFICATION FUNCTION */
+function customHashPassword($password, $salt = null, $rounds = 500)
+{
+    if (!$salt) {
+        $salt = bin2hex(random_bytes(16)); // 16 bytes salt
+    }
+
+    $combined = $salt . $password;
+
+    $hash = hash('sha256', $combined);
+    for ($i = 0; $i < $rounds; $i++) {
+        $hash = hash('sha256', $hash . $combined);
+    }
+
+    return $salt . ':' . $hash;
+}
+
+function verifyCustomPassword($password, $stored, $rounds = 500)
+{
+    list($salt, $hash) = explode(':', $stored);
+    return customHashPassword($password, $salt, $rounds) === $stored;
+}
+
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Normalized inputs
@@ -68,27 +94,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->fetch();
             
             // Verify password
-            if (password_verify($password, $hashed_password)) {
-                // Set session variables
-                $_SESSION['user_id'] = $user_id;
-                $_SESSION['user_name'] = $user_name;
-                $_SESSION['user_email'] = $email;
-                 $_SESSION['user_role'] = $role;
+if (verifyCustomPassword($password, $hashed_password, 500)) {
+    // Set session variables
+    $_SESSION['user_id'] = $user_id;
+    $_SESSION['user_name'] = $user_name;
+    $_SESSION['user_email'] = $email;
+    $_SESSION['user_role'] = $role;
 
-                // Redirect to dashboard
-                 if ($role == 'admin') {
-            header('Location: admin.php');
-        } else {
-                header("Location: Tourism.php?login_success=true");
-        }
-                exit();
-            } else {
-                $login_error = "Invalid email or password.";
-            }
-        } else {
-            $login_error = "Invalid email or password.";
-        }
-        
+    // Redirect to dashboard
+    if ($role == 'admin') {
+        header('Location: admin.php');
+    } else {
+        header("Location: Tourism.php?login_success=true");
+    }
+    exit();
+} else {
+    $login_error = "Invalid email or password.";
+}
+}    
         $stmt->close();
         $conn->close();
     }

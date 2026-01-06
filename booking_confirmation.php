@@ -169,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <title>Booking Confirmation - Trip Nest</title>
-    <link rel="stylesheet" href="css.css">
+    <link rel="stylesheet" href="home.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .container { max-width: 800px; margin: 100px auto; padding: 2rem; background: white; border-radius: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }

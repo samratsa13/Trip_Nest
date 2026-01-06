@@ -3520,65 +3520,7 @@ try {
                 });
             }
             
-            // Monthly Bookings Trend Chart
-            const monthlyBookingsCtx = document.getElementById('monthlyBookingsChart');
-            if (monthlyBookingsCtx) {
-                const monthlyBookingsData = <?php echo json_encode($monthly_bookings); ?>;
-                new Chart(monthlyBookingsCtx, {
-                    type: 'line',
-                    data: {
-                        labels: monthlyBookingsData.map(item => item.month),
-                        datasets: [
-                            {
-                                label: 'Hotel Bookings',
-                                data: monthlyBookingsData.map(item => item.hotel),
-                                borderColor: 'rgba(111, 126, 203, 1)',
-                                backgroundColor: 'rgba(111, 126, 203, 0.2)',
-                                tension: 0.4,
-                                fill: true
-                            },
-                            {
-                                label: 'Activity Bookings',
-                                data: monthlyBookingsData.map(item => item.activity),
-                                borderColor: 'rgba(255, 87, 34, 1)',
-                                backgroundColor: 'rgba(255, 87, 34, 0.2)',
-                                tension: 0.4,
-                                fill: true
-                            },
-                            {
-                                label: 'Total Bookings',
-                                data: monthlyBookingsData.map(item => item.total),
-                                borderColor: 'rgba(3, 24, 129, 1)',
-                                backgroundColor: 'rgba(3, 24, 129, 0.2)',
-                                tension: 0.4,
-                                fill: true,
-                                borderWidth: 3
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 1,
-                                    precision: 0
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-            
-
-            
+          
             // Revenue Breakdown Chart
             const revenueCtx = document.getElementById('revenueChart');
             if (revenueCtx) {

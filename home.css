@@ -26,9 +26,7 @@ nav,
     border-radius: 0.5rem;
     margin: 20px auto 2rem;
     max-width: 1200px;
-    /* Constraint width */
     width: 95%;
-    /* Responsive width */
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     position: sticky;
     top: 20px;
@@ -67,6 +65,13 @@ nav,
     transform: translateY(-2px);
     color: white;
 }
+
+/* Remove old complex hover effects from previous CSS */
+.nav-links a::after,
+.nav-links a::before {
+    display: none;
+}
+
 
 /* Remove old complex hover effects from previous CSS */
 .nav-links a::after,
