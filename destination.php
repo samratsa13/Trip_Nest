@@ -15,41 +15,9 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
     <link rel="stylesheet" href="destination.css">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav id="navbar">
-        <div style="display: flex; align-items: center; gap: 2rem;">
-            <h1 class="logo">Trip Nest</h1>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <a href="cart.php" class="cart-button" id="cartButton">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span class="cart-count" id="cartCount">0</span>
-                </a>
-            <?php endif; ?>
-        </div>
-        
-        <div class="menu-btn">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-        
-        <ul class="nav-links">
-            <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#itenary">Itinerary</a></li>
-            <li><a href="destination.php" class="active">Destinations</a></li>
-            <li><a href="dashboard.php?tab=bookings">Bookings</a></li>
-            <li><a href="Tourism.php#contact">Contact</a></li>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <li class="user-menu">
-                    <a href="dashboard.php" class="user-icon">
-                        <i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name']); ?>
-                    </a>
-                </li>
-            <?php else: ?>
-                <li><a href="login.php">Join Us</a></li>
-            <?php endif; ?>
-        </ul>
-    </nav>
+    
+<?php include("components/nav.php") ?>
+
 
     <!-- Hero Section -->
     <section class="hero" id="home">

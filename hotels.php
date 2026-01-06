@@ -375,33 +375,27 @@ if (isset($_GET['id'])) {
 </head>
 <body>
     <!-- Navigation -->
-    <nav id="navbar">
+    <nav class="navbar">
         <h1 class="logo">Trip Nest</h1>
-        
+        <div class="nav-links">
+            <a href="Tourism.php">Home</a>
+            <a href="Tourism.php#itenary">Itinerary</a>
+            <a href="destination.php">Destinations</a>
+            <a href="Tourism.php#contact">Contact</a>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <a href="bookings.php">Bookings</a>
+                <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>
+                <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
+                <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <?php else: ?>
+                <a href="login.php">Join Us</a>
+            <?php endif; ?>
+        </div>
         <div class="menu-btn">
             <span></span>
             <span></span>
             <span></span>
         </div>
-        
-        <ul class="nav-links">
-            <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#itenary">Itinerary</a></li>
-            <li><a href="destination.php">Destinations</a></li>
-            <!-- <li><a href="hotels.php" class="active">Hotels</a></li>
-            <li><a href="activities.php">Activities</a></li> -->
-            <li><a href="bookings.php">Bookings</a></li>
-            <li><a href="Tourism.php#contact">Contact</a></li>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <li class="user-menu">
-                    <a href="dashboard.php" class="user-icon">
-                        <i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name']); ?>
-                    </a>
-                </li>
-            <?php else: ?>
-                <li><a href="login.php">Join Us</a></li>
-            <?php endif; ?>
-        </ul>
     </nav>
 
     <?php if ($selected_hotel): ?>
@@ -449,8 +443,11 @@ if (isset($_GET['id'])) {
                             <div>
                                 <div class="room-price">NPR <?php echo number_format($room['price_npr'], 2); ?>/night</div>
                                 <?php if (isset($_SESSION['user_id']) && $_SESSION['user_role'] !== 'admin'): ?>
-                                    <button class="view-btn" onclick="openBookingModal(<?php echo $selected_hotel['id']; ?>, <?php echo $room['id']; ?>, '<?php echo htmlspecialchars($room['room_type']); ?>', '<?php echo htmlspecialchars($room['ac_type']); ?>', <?php echo $room['price_npr']; ?>)">
-                                        Book Now
+                                    <a href="booking_confirmation.php?id=<?php echo $room['id']; ?>&type=room" class="view-btn" style="text-decoration: none; display: block; text-align: center; margin-bottom: 0.5rem; background: #28a745;">
+                                        <i class="fas fa-check"></i> Book Now
+                                    </a>
+                                    <button class="view-btn" onclick="addToWishlist('room', <?php echo $room['id']; ?>, '<?php echo addslashes($selected_hotel['name']) . ' - ' . $room['room_type']; ?>', '<?php echo $selected_hotel['image_path']; ?>', <?php echo $room['price_npr']; ?>)">
+                                        <i class="fas fa-heart"></i> Add to Wishlist
                                     </button>
                                 <?php elseif (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'admin'): ?>
                                     <button class="view-btn" style="background: #999; cursor: not-allowed; opacity: 0.6;" disabled>Not Available</button>
@@ -798,6 +795,32 @@ if (isset($_GET['id'])) {
                 }
             }
         });
+        
+        function addToWishlist(type, id, name, image, price) {
+            const formData = new FormData();
+            formData.append('item_type', type);
+            formData.append('item_id', id);
+            formData.append('item_name', name);
+            formData.append('item_image', image);
+            formData.append('item_price', price);
+            
+            fetch('add_to_wishlist.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                } else {
+                    alert(data.message);
+                    if (data.message.toLowerCase().includes('login')) {
+                        window.location.href = 'login.php';
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
         
         // Navbar scroll effect
         window.addEventListener('scroll', function() {

@@ -108,6 +108,15 @@ if (isset($_GET['q']) && $_GET['q'] !== '') {
     // Perform search
     $activities = binarySearchActivities($activities, $search_key);
 }
+
+// Get activity details if ID is provided
+$selected_activity = null;
+if (isset($_GET['id'])) {
+    $activity_id = intval($_GET['id']);
+    $stmt = $pdo->prepare("SELECT * FROM activities WHERE id = ? AND status = 'active'");
+    $stmt->execute([$activity_id]);
+    $selected_activity = $stmt->fetch();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -294,35 +303,77 @@ if (isset($_GET['q']) && $_GET['q'] !== '') {
 </head>
 <body>
     <!-- Navigation -->
-    <nav id="navbar">
+    <nav class="navbar">
         <h1 class="logo">Trip Nest</h1>
-        
+        <div class="nav-links">
+            <a href="Tourism.php">Home</a>
+            <a href="Tourism.php#itenary">Itinerary</a>
+            <a href="destination.php">Destinations</a>
+            <a href="Tourism.php#contact">Contact</a>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <a href="bookings.php">Bookings</a>
+                <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>
+                <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
+                <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <?php else: ?>
+                <a href="login.php">Join Us</a>
+            <?php endif; ?>
+        </div>
         <div class="menu-btn">
             <span></span>
             <span></span>
             <span></span>
         </div>
-        
-        <ul class="nav-links">
-            <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#itenary">Itinerary</a></li>
-            <li><a href="destination.php">Destinations</a></li>
-            <!-- <li><a href="hotels.php">Hotels</a></li>
-            <li><a href="activities.php" class="active">Activities</a></li> -->
-            <li><a href="dashboard.php?tab=bookings">Bookings</a></li>
-            <li><a href="Tourism.php#contact">Contact</a></li>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <li class="user-menu">
-                    <a href="dashboard.php" class="user-icon">
-                        <i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name']); ?>
-                    </a>
-                </li>
-            <?php else: ?>
-                <li><a href="login.php">Join Us</a></li>
-            <?php endif; ?>
-        </ul>
     </nav>
 
+    <?php if ($selected_activity): ?>
+        <div class="activities-container" style="max-width: 1000px;">
+             <a href="activities.php" style="color: #031881; text-decoration: none; margin-bottom: 1rem; display: inline-block;">
+                <i class="fas fa-arrow-left"></i> Back to Activities
+            </a>
+            
+            <?php if ($booking_success): ?>
+                <div class="alert alert-success"><?php echo $booking_success; ?></div>
+            <?php endif; ?>
+            
+            <?php if ($booking_error): ?>
+                <div class="alert alert-error"><?php echo $booking_error; ?></div>
+            <?php endif; ?>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1rem; background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                 <div>
+                    <?php if (!empty($selected_activity['image_path'])): ?>
+                        <img src="<?php echo htmlspecialchars($selected_activity['image_path']); ?>" alt="<?php echo htmlspecialchars($selected_activity['name']); ?>" style="width: 100%; height: 400px; object-fit: cover; border-radius: 0.5rem;">
+                    <?php endif; ?>
+                 </div>
+                 <div>
+                     <h1 style="color: #031881; margin-bottom: 0.5rem;"><?php echo htmlspecialchars($selected_activity['name']); ?></h1>
+                     <p style="font-size: 1.5rem; font-weight: 700; color: #031881; margin: 1rem 0;">NPR <?php echo number_format($selected_activity['price_npr'], 2); ?></p>
+                     
+                     <?php if (!empty($selected_activity['description'])): ?>
+                        <div style="color: #666; line-height: 1.6; margin-bottom: 2rem;">
+                            <?php echo nl2br(htmlspecialchars($selected_activity['description'])); ?>
+                        </div>
+                     <?php endif; ?>
+                     
+                     <div>
+                        <?php if (isset($_SESSION['user_id']) && $_SESSION['user_role'] !== 'admin'): ?>
+                             <a href="booking_confirmation.php?id=<?php echo $selected_activity['id']; ?>&type=activity" class="book-btn" style="text-decoration: none; display: block; text-align: center; margin-bottom: 1rem; background: #28a745;">
+                                <i class="fas fa-check"></i> Book Now
+                             </a>
+                             <button class="book-btn" onclick="addToWishlist('activity', <?php echo $selected_activity['id']; ?>, '<?php echo addslashes($selected_activity['name']); ?>', '<?php echo $selected_activity['image_path']; ?>', <?php echo $selected_activity['price_npr']; ?>)">
+                                <i class="fas fa-heart"></i> Add to Wishlist
+                             </button>
+                        <?php elseif (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'admin'): ?>
+                             <button class="book-btn" style="background: #999; cursor: not-allowed; opacity: 0.6;" disabled>Not Available</button>
+                        <?php else: ?>
+                             <a href="login.php" class="book-btn" style="text-decoration: none; display: block; text-align: center;">Login to Book</a>
+                        <?php endif; ?>
+                     </div>
+                 </div>
+            </div>
+        </div>
+    <?php else: ?>
     <div class="activities-container">
         <h1 style="text-align: center; color: #031881; margin-bottom: 1rem;">Activities & Adventures</h1>
         <p style="text-align: center; color: #666; margin-bottom: 2rem;">Explore exciting activities and adventures</p>
@@ -359,8 +410,11 @@ if (isset($_GET['q']) && $_GET['q'] !== '') {
                             <?php endif; ?>
                             <div class="activity-price">NPR <?php echo number_format($activity['price_npr'], 2); ?></div>
                             <?php if (isset($_SESSION['user_id']) && $_SESSION['user_role'] !== 'admin'): ?>
-                                <button class="book-btn" onclick="openBookingModal(<?php echo $activity['id']; ?>, '<?php echo htmlspecialchars(addslashes($activity['name'])); ?>', <?php echo $activity['price_npr']; ?>)">
-                                    Book Now
+                                <a href="booking_confirmation.php?id=<?php echo $activity['id']; ?>&type=activity" class="book-btn" style="text-decoration: none; display: block; text-align: center; margin-bottom: 0.5rem; background: #28a745;">
+                                    <i class="fas fa-check"></i> Book Now
+                                </a>
+                                <button class="book-btn" onclick="addToWishlist('activity', <?php echo $activity['id']; ?>, '<?php echo addslashes($activity['name']); ?>', '<?php echo $activity['image_path']; ?>', <?php echo $activity['price_npr']; ?>)">
+                                    <i class="fas fa-heart"></i> Add to Wishlist
                                 </button>
                             <?php elseif (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'admin'): ?>
                                 <button class="book-btn" style="background: #999; cursor: not-allowed; opacity: 0.6;" disabled>Not Available</button>
@@ -373,6 +427,7 @@ if (isset($_GET['q']) && $_GET['q'] !== '') {
             <?php endif; ?>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- Booking Modal -->
     <div id="bookingModal" class="booking-modal">
@@ -659,6 +714,33 @@ if (isset($_GET['q']) && $_GET['q'] !== '') {
                 menuBtn.classList.toggle('active');
                 navLinks.classList.toggle('active');
             });
+        }
+    </script>
+    <script>
+        function addToWishlist(type, id, name, image, price) {
+            const formData = new FormData();
+            formData.append('item_type', type);
+            formData.append('item_id', id);
+            formData.append('item_name', name);
+            formData.append('item_image', image);
+            formData.append('item_price', price);
+            
+            fetch('add_to_wishlist.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                } else {
+                    alert(data.message);
+                    if (data.message.toLowerCase().includes('login')) {
+                        window.location.href = 'login.php';
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
         }
     </script>
 </body>

@@ -461,7 +461,7 @@ try {
         <div class="navbar-links">
             <a href="Tourism.php"><i class="fas fa-home"></i> Home</a>
             <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
-            <a href="cart.php"><i class="fas fa-shopping-cart"></i> Cart</a>
+            <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>
             <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>

@@ -36,29 +36,8 @@ function validateImageUpload($file) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // // Create itinerary_days table if it doesn't exist
-    // try {
-    //     $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
-    //         id INT AUTO_INCREMENT PRIMARY KEY,
-    //         itinerary_id INT NOT NULL,
-    //         day_number INT NOT NULL,
-    //         day_title VARCHAR(255) NOT NULL,
-    //         day_description TEXT,
-    //         activities TEXT,
-    //         accommodation VARCHAR(255),
-    //         meals VARCHAR(255),
-    //         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    //         FOREIGN KEY (itinerary_id) REFERENCES popular_itineraries(id) ON DELETE CASCADE,
-    //         INDEX idx_itinerary_id (itinerary_id),
-    //         UNIQUE KEY unique_day (itinerary_id, day_number)
-    //     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    // } catch (PDOException $e) {
-    //     // Table might already exist
-    // }
     
-    // Create itinerary_days table if it doesn't exist
 
-    // Add column for multiple images if it doesn't exist
     try {
         $pdo->exec("ALTER TABLE popular_itineraries ADD COLUMN additional_images TEXT COMMENT 'JSON array of additional image paths'");
     } catch (PDOException $e) {
@@ -1293,20 +1272,7 @@ try {
             <h2>Trip Nest Admin</h2>
             <p>Welcome, <?php echo htmlspecialchars($_SESSION['user_name']); ?></p>
         </div>
-        <nav class="sidebar-menu">
-            <ul>
-                <li><a href="#" class="active" data-tab="dashboard"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
-                <li><a href="#" data-tab="users"><i class="fas fa-users"></i> <span>Users</span></a></li>
-                <li><a href="#" data-tab="orders"><i class="fas fa-shopping-cart"></i> <span>Orders</span></a></li>
-                <li><a href="#" data-tab="itineraries"><i class="fas fa-route"></i> <span>Popular Itineraries</span></a></li>
-                <li><a href="#" data-tab="destinations"><i class="fas fa-map-marker-alt"></i> <span>Destinations</span></a></li>
-                <li><a href="#" data-tab="hotels"><i class="fas fa-hotel"></i> <span>Hotels</span></a></li>
-                <li><a href="#" data-tab="activities"><i class="fas fa-hiking"></i> <span>Activities</span></a></li>
-                <li><a href="#" data-tab="bookings"><i class="fas fa-calendar-check"></i> <span>Bookings</span></a></li>
-                <li><a href="Tourism.php"><i class="fas fa-home"></i> <span>Back to Site</span></a></li>
-                <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
-            </ul>
-        </nav>
+        <?php include("components/admin-sidebar.php") ?>
     </div>
 
     <!-- Main Content -->
@@ -1321,90 +1287,7 @@ try {
 
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content active">
-            <div class="dashboard-cards">
-                <div class="card users">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $user_count; ?></h3>
-                            <p>Total Users</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-users"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card orders">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $order_count; ?></h3>
-                            <p>Total Orders</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-shopping-cart"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="card itineraries">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $itinerary_count; ?></h3>
-                            <p>Popular Itineraries</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-route"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card destinations">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $destination_count; ?></h3>
-                            <p>Destinations</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-map-marker-alt"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card hotels">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $hotel_count; ?></h3>
-                            <p>Hotels</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-hotel"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card activities">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $activity_count; ?></h3>
-                            <p>Activities</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-hiking"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card bookings">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $total_bookings; ?></h3>
-                            <p>Total Bookings</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-calendar-check"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <?php include("components/admin-states.php") ?>
             
             <!-- Comprehensive Reports Section -->
             <div style="margin-top: 2rem;">
@@ -1420,10 +1303,10 @@ try {
                             <h4 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Total Revenue</h4>
                             <h2 style="margin: 0.5rem 0; font-size: 2rem;">NPR <?php echo number_format($total_revenue, 2); ?></h2>
                         </div>
-                        <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
+                        <!-- <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
                             <h4 style="margin: 0; color: #666;">Orders Revenue</h4>
                             <h3 style="margin: 0.5rem 0; color: var(--primary);">NPR <?php echo number_format($total_revenue_orders, 2); ?></h3>
-                        </div>
+                        </div> -->
                         <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
                             <h4 style="margin: 0; color: #666;">Hotel Bookings</h4>
                             <h3 style="margin: 0.5rem 0; color: var(--secondary);">NPR <?php echo number_format($total_revenue_hotel, 2); ?></h3>
@@ -1454,23 +1337,7 @@ try {
                     </div>
                 </div>
                 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
-                    <!-- Monthly Bookings Trend -->
-                    <div class="table-container">
-                        <div class="table-header">
-                            <h3>Monthly Bookings Trend (Last 6 Months)</h3>
-                        </div>
-                        <canvas id="monthlyBookingsChart" style="max-height: 300px;"></canvas>
-                    </div>
-                    
-                    <!-- Monthly Orders Trend -->
-                    <div class="table-container">
-                        <div class="table-header">
-                            <h3>Monthly Orders Trend (Last 6 Months)</h3>
-                        </div>
-                        <canvas id="monthlyOrdersChart" style="max-height: 300px;"></canvas>
-                    </div>
-                </div>
+                
                 
                 <!-- Revenue Breakdown -->
                 <div class="table-container">
@@ -1509,35 +1376,7 @@ try {
                 </table>
             </div>
 
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>Recent Orders</h3>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Order ID</th>
-                            <th>User</th>
-                            <th>Package</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($recent_orders as $order): ?>
-                        <tr>
-                            <td>#<?php echo $order['id']; ?></td>
-                            <td><?php echo htmlspecialchars($order['user_name']); ?></td>
-                            <td><?php echo htmlspecialchars($order['package_name']); ?></td>
-                            <td>$<?php echo number_format($order['amount'], 2); ?></td>
-                            <td><span class="status status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></span></td>
-                            <td><?php echo date('M j, Y', strtotime($order['created_at'])); ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+           
         </div>
 
         <!-- Users Tab -->
@@ -3661,21 +3500,21 @@ try {
                 new Chart(revenueCtx, {
                     type: 'bar',
                     data: {
-                        labels: ['Orders', 'Hotel Bookings', 'Activity Bookings'],
+                        labels: ['Hotel Bookings', 'Activity Bookings'],
                         datasets: [{
                             label: 'Revenue (NPR)',
                             data: [
-                                <?php echo $total_revenue_orders; ?>,
+                                // <?php echo $total_revenue_orders; ?>,
                                 <?php echo $total_revenue_hotel; ?>,
                                 <?php echo $total_revenue_activity; ?>
                             ],
                             backgroundColor: [
-                                'rgba(3, 24, 129, 0.8)',
+                                // 'rgba(3, 24, 129, 0.8)',
                                 'rgba(111, 126, 203, 0.8)',
                                 'rgba(255, 87, 34, 0.8)'
                             ],
                             borderColor: [
-                                'rgba(3, 24, 129, 1)',
+                                // 'rgba(3, 24, 129, 1)',
                                 'rgba(111, 126, 203, 1)',
                                 'rgba(255, 87, 34, 1)'
                             ],

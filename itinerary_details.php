@@ -347,39 +347,27 @@ $selected_day = isset($_GET['day']) ? intval($_GET['day']) : 0;
 </head>
 <body>
     <!-- Navigation -->
-    <nav id="navbar">
-        <div style="display: flex; align-items: center; gap: 2rem;">
-            <h1 class="logo">Trip Nest</h1>
+    <nav class="navbar">
+        <h1 class="logo">Trip Nest</h1>
+        <div class="nav-links">
+            <a href="Tourism.php">Home</a>
+            <a href="Tourism.php#itenary">Itinerary</a>
+            <a href="destination.php">Destinations</a>
+            <a href="Tourism.php#contact">Contact</a>
             <?php if (isset($_SESSION['user_id'])): ?>
-                <a href="cart.php" class="cart-button" id="cartButton">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span class="cart-count" id="cartCount">0</span>
-                </a>
+                <a href="bookings.php">Bookings</a>
+                <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>
+                <a href="dashboard.php"><i class="fas fa-user"></i> Profile</a>
+                <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <?php else: ?>
+                <a href="login.php">Join Us</a>
             <?php endif; ?>
         </div>
-        
         <div class="menu-btn">
             <span></span>
             <span></span>
             <span></span>
         </div>
-        
-        <ul class="nav-links">
-            <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#itenary">Itinerary</a></li>
-            <li><a href="destination.php">Destinations</a></li>
-            <li><a href="dashboard.php?tab=bookings">Bookings</a></li>
-            <li><a href="Tourism.php#contact">Contact</a></li>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <li class="user-menu">
-                    <a href="dashboard.php" class="user-icon">
-                        <i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name']); ?>
-                    </a>
-                </li>
-            <?php else: ?>
-                <li><a href="login.php">Join Us</a></li>
-            <?php endif; ?>
-        </ul>
     </nav>
 
     <div class="itinerary-details-container">
@@ -410,12 +398,12 @@ $selected_day = isset($_GET['day']) ? intval($_GET['day']) : 0;
                 <?php echo nl2br(htmlspecialchars($itinerary['description'])); ?>
             </div>
             <?php if (isset($_SESSION['user_id'])): ?>
-                <button class="book-now-btn" onclick="addToCart('itinerary', <?php echo $itinerary['id']; ?>, '<?php echo htmlspecialchars(addslashes($itinerary['title'])); ?>', '<?php echo htmlspecialchars(addslashes($itinerary['description'])); ?>', '<?php echo htmlspecialchars(addslashes($itinerary['image_path'] ?: 'img/default-itinerary.jpg')); ?>', 200)">
-                    <i class="fas fa-shopping-cart"></i> Book Now
+                <button class="book-now-btn" onclick="addToWishlist('itinerary', <?php echo $itinerary['id']; ?>, '<?php echo htmlspecialchars(addslashes($itinerary['title'])); ?>', '<?php echo htmlspecialchars(addslashes($itinerary['image_path'] ?: 'img/default-itinerary.jpg')); ?>', 200)">
+                    <i class="fas fa-heart"></i> Add to Wishlist
                 </button>
             <?php else: ?>
                 <a href="login.php" class="book-now-btn">
-                    <i class="fas fa-sign-in-alt"></i> Login to Book
+                    <i class="fas fa-sign-in-alt"></i> Login to Add to Wishlist
                 </a>
             <?php endif; ?>
         </div>
@@ -483,37 +471,30 @@ $selected_day = isset($_GET['day']) ? intval($_GET['day']) : 0;
 
     <script>
         // Cart functionality
-        function addToCart(itemType, itemId, itemName, itemDescription, itemImage, itemPrice) {
-            <?php if (isset($_SESSION['user_id'])): ?>
-                const formData = new FormData();
-                formData.append('item_type', itemType);
-                formData.append('item_id', itemId);
-                formData.append('item_name', itemName);
-                formData.append('item_description', itemDescription);
-                formData.append('item_image', itemImage);
-                formData.append('item_price', itemPrice);
-                
-                fetch('add_to_cart.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Item added to cart!');
-                        updateCartCount();
-                    } else {
-                        alert(data.message || 'Error adding item to cart');
+        function addToWishlist(type, id, name, image, price) {
+            const formData = new FormData();
+            formData.append('item_type', type);
+            formData.append('item_id', id);
+            formData.append('item_name', name);
+            formData.append('item_image', image);
+            formData.append('item_price', price);
+            
+            fetch('add_to_wishlist.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                } else {
+                    alert(data.message);
+                    if (data.message.toLowerCase().includes('login')) {
+                        window.location.href = 'login.php';
                     }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error adding item to cart');
-                });
-            <?php else: ?>
-                alert('Please login to add items to cart');
-                window.location.href = 'login.php';
-            <?php endif; ?>
+                }
+            })
+            .catch(error => console.error('Error:', error));
         }
 
         function updateCartCount() {
