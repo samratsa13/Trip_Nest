@@ -11,7 +11,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
 require_once 'db_connection.php';
 
 // Create upload directories if they don't exist
-$upload_dirs = ['uploads/offers/', 'uploads/itineraries/', 'uploads/destinations/', 'uploads/hotels/', 'uploads/activities/'];
+$upload_dirs = ['uploads/itineraries/', 'uploads/destinations/', 'uploads/hotels/', 'uploads/activities/'];
 foreach ($upload_dirs as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
@@ -36,37 +36,6 @@ function validateImageUpload($file) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Add Special Offer
-    if (isset($_POST['add_offer'])) {
-        $title = $_POST['offer_title'];
-        $description = $_POST['offer_description'];
-        $status = $_POST['offer_status'];
-        
-        // Handle image upload
-        $image_path = '';
-        if (isset($_FILES['offer_image'])) {
-            $validation_result = validateImageUpload($_FILES['offer_image']);
-            if (!$validation_result['valid']) {
-                $offer_error = $validation_result['message'];
-            } else {
-                $target_dir = "uploads/offers/";
-                $image_name = 'offer_' . time() . '.' . $validation_result['extension'];
-                $target_file = $target_dir . $image_name;
-                
-                if (move_uploaded_file($_FILES['offer_image']['tmp_name'], $target_file)) {
-                    $image_path = $target_file;
-                }
-            }
-        }
-        
-        $stmt = $pdo->prepare("INSERT INTO special_offers (title, description, image_path, status) VALUES (?, ?, ?, ?)");
-        if ($stmt->execute([$title, $description, $image_path, $status])) {
-            $offer_success = "Special offer added successfully!";
-        } else {
-            $offer_error = "Error adding special offer!";
-        }
-    }
-    
     // // Create itinerary_days table if it doesn't exist
     // try {
     //     $pdo->exec("CREATE TABLE IF NOT EXISTS itinerary_days (
@@ -246,28 +215,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $itinerary_error = "Error deleting day!";
         }
     }
-    
-    // Delete Special Offer
-    if (isset($_POST['delete_offer'])) {
-        $offer_id = $_POST['offer_id'];
-        
-        // Get image path to delete file
-        $stmt = $pdo->prepare("SELECT image_path FROM special_offers WHERE id = ?");
-        $stmt->execute([$offer_id]);
-        $offer = $stmt->fetch();
-        
-        if ($offer && !empty($offer['image_path']) && file_exists($offer['image_path'])) {
-            unlink($offer['image_path']);
-        }
-        
-        $stmt = $pdo->prepare("DELETE FROM special_offers WHERE id = ?");
-        if ($stmt->execute([$offer_id])) {
-            $offer_success = "Special offer deleted successfully!";
-        } else {
-            $offer_error = "Error deleting special offer!";
-        }
-    }
-    
     // Delete Popular Itinerary
     if (isset($_POST['delete_itinerary'])) {
         $itinerary_id = $_POST['itinerary_id'];
@@ -288,20 +235,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $itinerary_error = "Error deleting popular itinerary!";
         }
     }
-    
-    // Update Offer Status
-    if (isset($_POST['update_offer_status'])) {
-        $offer_id = $_POST['offer_id'];
-        $status = $_POST['offer_status'];
-        
-        $stmt = $pdo->prepare("UPDATE special_offers SET status = ? WHERE id = ?");
-        if ($stmt->execute([$status, $offer_id])) {
-            $offer_success = "Offer status updated successfully!";
-        } else {
-            $offer_error = "Error updating offer status!";
-        }
-    }
-    
     // Update Itinerary Status
     if (isset($_POST['update_itinerary_status'])) {
         $itinerary_id = $_POST['itinerary_id'];
@@ -808,8 +741,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // Get counts for dashboard
 $user_count = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-$order_count = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn();
-$offer_count = $pdo->query("SELECT COUNT(*) FROM special_offers")->fetchColumn();
 $itinerary_count = $pdo->query("SELECT COUNT(*) FROM popular_itineraries")->fetchColumn();
 $destination_count = $pdo->query("SELECT COUNT(*) FROM destinations")->fetchColumn();
 
@@ -850,10 +781,10 @@ try {
     ];
     
     // Revenue statistics
-    $total_revenue_orders = $pdo->query("SELECT COALESCE(SUM(amount), 0) FROM orders")->fetchColumn();
     $total_revenue_hotel = $pdo->query("SELECT COALESCE(SUM(total_price_npr), 0) FROM hotel_bookings WHERE status = 'approved'")->fetchColumn();
     $total_revenue_activity = $pdo->query("SELECT COALESCE(SUM(total_price_npr), 0) FROM activity_bookings WHERE status = 'approved'")->fetchColumn();
-    $total_revenue = $total_revenue_orders + $total_revenue_hotel + $total_revenue_activity;
+    $total_revenue_orders = 0;
+    $total_revenue = $total_revenue_hotel + $total_revenue_activity;
     
     // Monthly bookings trend (last 6 months)
     $monthly_bookings = [];
@@ -869,18 +800,8 @@ try {
         ];
     }
     
-    // Monthly orders trend (last 6 months)
+    // Monthly orders trend removed
     $monthly_orders = [];
-    for ($i = 5; $i >= 0; $i--) {
-        $month = date('Y-m', strtotime("-$i months"));
-        $order_count = $pdo->query("SELECT COUNT(*) FROM orders WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
-        $order_revenue = $pdo->query("SELECT COALESCE(SUM(amount), 0) FROM orders WHERE DATE_FORMAT(created_at, '%Y-%m') = '$month'")->fetchColumn();
-        $monthly_orders[] = [
-            'month' => date('M Y', strtotime("-$i months")),
-            'count' => $order_count,
-            'revenue' => $order_revenue
-        ];
-    }
     
 } catch (PDOException $e) {
     $hotel_bookings_count = 0;
@@ -892,18 +813,18 @@ try {
     $total_revenue_activity = 0;
     $monthly_bookings = [];
     $monthly_orders = [];
+    $all_orders = [];
 }
 
 // Get data for tables
-$offers = $pdo->query("SELECT * FROM special_offers ORDER BY created_at DESC")->fetchAll();
 $itineraries = $pdo->query("SELECT * FROM popular_itineraries ORDER BY created_at DESC")->fetchAll();
 $destinations = $pdo->query("SELECT * FROM destinations ORDER BY created_at DESC")->fetchAll();
 $recent_users = $pdo->query("SELECT * FROM users ORDER BY created_at DESC LIMIT 5")->fetchAll();
-$recent_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN users u ON o.user_id = u.user_id ORDER BY o.created_at DESC LIMIT 5")->fetchAll();
+$recent_orders = [];
 
-// Get all users and orders for their respective tabs
+// Get all users
 $all_users = $pdo->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll();
-$all_orders = $pdo->query("SELECT o.*, u.name as user_name FROM orders o JOIN users u ON o.user_id = u.user_id ORDER BY o.created_at DESC")->fetchAll();
+$all_orders = [];
 
 // Get hotels, activities, and bookings
 try {
@@ -1099,7 +1020,7 @@ try {
         
         .users .card-icon { background: rgba(40, 167, 69, 0.2); color: var(--success); }
         .orders .card-icon { background: rgba(255, 193, 7, 0.2); color: var(--warning); }
-        .offers .card-icon { background: rgba(3, 24, 129, 0.2); color: var(--primary); }
+        /* Special offers card removed */
         .itineraries .card-icon { background: rgba(220, 53, 69, 0.2); color: var(--danger); }
         .destinations .card-icon { background: rgba(23, 162, 184, 0.2); color: #17a2b8; }
         .hotels .card-icon { background: rgba(111, 126, 203, 0.2); color: var(--secondary); }
@@ -1377,7 +1298,6 @@ try {
                 <li><a href="#" class="active" data-tab="dashboard"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
                 <li><a href="#" data-tab="users"><i class="fas fa-users"></i> <span>Users</span></a></li>
                 <li><a href="#" data-tab="orders"><i class="fas fa-shopping-cart"></i> <span>Orders</span></a></li>
-                <li><a href="#" data-tab="offers"><i class="fas fa-gift"></i> <span>Special Offers</span></a></li>
                 <li><a href="#" data-tab="itineraries"><i class="fas fa-route"></i> <span>Popular Itineraries</span></a></li>
                 <li><a href="#" data-tab="destinations"><i class="fas fa-map-marker-alt"></i> <span>Destinations</span></a></li>
                 <li><a href="#" data-tab="hotels"><i class="fas fa-hotel"></i> <span>Hotels</span></a></li>
@@ -1425,19 +1345,6 @@ try {
                         </div>
                     </div>
                 </div>
-                
-                <div class="card offers">
-                    <div class="card-header">
-                        <div>
-                            <h3><?php echo $offer_count; ?></h3>
-                            <p>Special Offers</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-gift"></i>
-                        </div>
-                    </div>
-                </div>
-                
                 <div class="card itineraries">
                     <div class="card-header">
                         <div>
@@ -1717,74 +1624,6 @@ try {
                             <td>$<?php echo number_format($order['amount'], 2); ?></td>
                             <td><span class="status status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></span></td>
                             <td><?php echo date('M j, Y', strtotime($order['created_at'])); ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Special Offers Tab -->
-        <div id="offers" class="tab-content">
-            <div class="table-container">
-                <div class="table-header">
-                    <h3>Special Offers</h3>
-                    <button class="btn btn-primary" onclick="openModal('offer')">Add Offer</button>
-                </div>
-                
-                <?php if (isset($offer_success)): ?>
-                    <div class="alert alert-success"><?php echo $offer_success; ?></div>
-                <?php endif; ?>
-                
-                <?php if (isset($offer_error)): ?>
-                    <div class="alert alert-error"><?php echo $offer_error; ?></div>
-                <?php endif; ?>
-                
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Title</th>
-                            <th>Description</th>
-                            <th>Image</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($offers as $offer): ?>
-                        <tr>
-                            <td><?php echo $offer['id']; ?></td>
-                            <td><?php echo htmlspecialchars($offer['title']); ?></td>
-                            <td><?php echo htmlspecialchars(substr($offer['description'], 0, 100)) . '...'; ?></td>
-                            <td>
-                                <?php if (!empty($offer['image_path'])): ?>
-                                    <img src="<?php echo $offer['image_path']; ?>" alt="Offer Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
-                                <?php else: ?>
-                                    No Image
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $offer['status']; ?>">
-                                    <?php echo ucfirst($offer['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="offer_id" value="<?php echo $offer['id']; ?>">
-                                        <select name="offer_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
-                                            <option value="active" <?php echo $offer['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="inactive" <?php echo $offer['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                        </select>
-                                        <input type="hidden" name="update_offer_status" value="1">
-                                    </form>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="offer_id" value="<?php echo $offer['id']; ?>">
-                                        <button type="submit" name="delete_offer" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this offer?')">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -2223,49 +2062,6 @@ try {
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
-
-    <!-- Offer Modal -->
-    <div id="offerModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add Special Offer</h3>
-                <span class="close" onclick="closeModal('offerModal')">&times;</span>
-            </div>
-            <form method="POST" enctype="multipart/form-data" id="offerForm">
-                <input type="hidden" name="add_offer" value="1">
-                <div class="form-group">
-                    <label for="offer_title">Title *</label>
-                    <input type="text" id="offer_title" name="offer_title" class="form-control" 
-                           pattern="^.{3,100}$" 
-                           title="Title must be 3-100 characters"
-                           required>
-                    <div id="offer_title_error" class="field-error"></div>
-                </div>
-                <div class="form-group">
-                    <label for="offer_description">Description *</label>
-                    <textarea id="offer_description" name="offer_description" class="form-control" 
-                              minlength="10" 
-                              maxlength="1000"
-                              title="Description must be 10-1000 characters"
-                              required></textarea>
-                    <div id="offer_description_error" class="field-error"></div>
-                </div>
-                <div class="form-group">
-                    <label for="offer_image">Image</label>
-                    <input type="file" id="offer_image" name="offer_image" class="form-control" accept="image/*" onchange="previewImage(this, 'offerPreview')">
-                    <img id="offerPreview" class="image-preview" src="#" alt="Image Preview">
-                </div>
-                <div class="form-group">
-                    <label for="offer_status">Status</label>
-                    <select id="offer_status" name="offer_status" class="form-control" required>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-primary">Save Offer</button>
-            </form>
         </div>
     </div>
 
@@ -3170,7 +2966,7 @@ try {
             // Initialize real-time validation for all forms
         document.addEventListener('DOMContentLoaded', function() {
             // Real-time validation on input/change
-            const forms = ['offerForm', 'itineraryForm', 'hotelForm', 'editHotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm'];
+            const forms = ['itineraryForm', 'hotelForm', 'editHotelForm', 'userForm', 'addDayForm', 'destinationForm', 'activityForm'];
             forms.forEach(formId => {
                 const form = document.getElementById(formId);
                 if (form) {

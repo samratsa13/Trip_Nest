@@ -34,68 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_quantity'])) {
     exit;
 }
 
-// Handle checkout - create booking
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['checkout'])) {
-    try {
-        // Get cart items
-        $cart_items = $pdo->prepare("SELECT * FROM cart_items WHERE user_id = ?");
-        $cart_items->execute([$user_id]);
-        $items = $cart_items->fetchAll();
-        
-        if (empty($items)) {
-            $checkout_error = "Your cart is empty!";
-        } else {
-            // Create orders table if it doesn't exist
-            $pdo->exec("CREATE TABLE IF NOT EXISTS orders (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                package_name VARCHAR(255) NOT NULL,
-                amount DECIMAL(10, 2) NOT NULL,
-                status VARCHAR(50) DEFAULT 'pending',
-                booking_details TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                INDEX idx_user_id (user_id)
-            )");
-            
-            $pdo->beginTransaction();
-            
-            $total_amount = 0;
-            $booking_details = [];
-            
-            foreach ($items as $item) {
-                $subtotal = $item['item_price'] * $item['quantity'];
-                $total_amount += $subtotal;
-                
-                $booking_details[] = [
-                    'type' => $item['item_type'],
-                    'name' => $item['item_name'],
-                    'description' => $item['item_description'],
-                    'quantity' => $item['quantity'],
-                    'price' => $item['item_price'],
-                    'subtotal' => $subtotal
-                ];
-            }
-            
-            // Create order for each cart item (or combine into one order)
-            $package_name = count($items) > 1 ? count($items) . ' Items Package' : $items[0]['item_name'];
-            $details_json = json_encode($booking_details);
-            
-            $order_stmt = $pdo->prepare("INSERT INTO orders (user_id, package_name, amount, booking_details, status) VALUES (?, ?, ?, ?, 'pending')");
-            $order_stmt->execute([$user_id, $package_name, $total_amount, $details_json]);
-            
-            // Clear cart after successful order
-            $delete_stmt = $pdo->prepare("DELETE FROM cart_items WHERE user_id = ?");
-            $delete_stmt->execute([$user_id]);
-            
-            $pdo->commit();
-            $checkout_success = "Booking confirmed! Your order has been placed successfully.";
-        }
-    } catch (PDOException $e) {
-        $pdo->rollBack();
-        $checkout_error = "Error processing booking: " . $e->getMessage();
-    }
-}
+// Order functionality removed - no checkout/orders allowed
 
 // Get cart items
 $stmt = $pdo->prepare("SELECT * FROM cart_items WHERE user_id = ? ORDER BY created_at DESC");
@@ -340,7 +279,6 @@ foreach ($cart_items as $item) {
         
         <ul class="nav-links">
             <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#special-offers">Special Offers</a></li>
             <li><a href="Tourism.php#itenary">Itinerary</a></li>
             <li><a href="destination.php">Destinations</a></li>
             <li><a href="bookings.php">Bookings</a></li>

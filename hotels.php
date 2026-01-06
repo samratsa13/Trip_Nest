@@ -386,7 +386,6 @@ if (isset($_GET['id'])) {
         
         <ul class="nav-links">
             <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#special-offers">Special Offers</a></li>
             <li><a href="Tourism.php#itenary">Itinerary</a></li>
             <li><a href="destination.php">Destinations</a></li>
             <!-- <li><a href="hotels.php" class="active">Hotels</a></li>

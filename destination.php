@@ -35,7 +35,6 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
         
         <ul class="nav-links">
             <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#special-offers">Special Offers</a></li>
             <li><a href="Tourism.php#itenary">Itinerary</a></li>
             <li><a href="destination.php" class="active">Destinations</a></li>
             <li><a href="dashboard.php?tab=bookings">Bookings</a></li>
@@ -79,42 +78,36 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
                     <img src="img/ktm.jpg" alt="Kathmandu" class="offer-img">
                     <h3>Kathmandu</h3>
                     <p>The capital city of Nepal, rich in culture and history. Visit ancient temples, bustling markets, and experience the vibrant local life in this UNESCO World Heritage city.</p>
-                    <button class="offer-button">Explore Kathmandu</button>
                 </div>
                 
                 <div class="offer-card">
                     <img src="img/pkr.jpg" alt="Pokhara" class="offer-img">
                     <h3>Pokhara</h3>
                     <p>Known as the gateway to the Annapurna region, Pokhara offers stunning lake views, adventure sports, and serves as the starting point for many treks in the Himalayas.</p>
-                    <button class="offer-button">Explore Pokhara</button>
                 </div>
                 
                 <div class="offer-card">
                     <img src="img/bhr.jpg" alt="Chitwan" class="offer-img">
                     <h3>Chitwan National Park</h3>
                     <p>Experience wildlife safari in Nepal's first national park. Spot rhinos, tigers, elephants, and various bird species in their natural habitat.</p>
-                    <button class="offer-button">Explore Chitwan</button>
                 </div>
                 
                 <div class="offer-card">
                     <img src="img/mountain-climb.jpg" alt="Mount Everest" class="offer-img">
                     <h3>Mount Everest Region</h3>
                     <p>Home to the world's highest peak, this region offers incredible trekking opportunities, Sherpa culture, and breathtaking mountain vistas.</p>
-                    <button class="offer-button">Explore Everest</button>
                 </div>
                 
                 <div class="offer-card">
                     <img src="img/city.jpg" alt="Lumbini" class="offer-img">
                     <h3>Lumbini</h3>
                     <p>The birthplace of Lord Buddha, Lumbini is a sacred pilgrimage site with ancient monasteries, peaceful gardens, and spiritual significance.</p>
-                    <button class="offer-button">Explore Lumbini</button>
                 </div>
                 
                 <div class="offer-card">
                     <img src="img/jungle-resort.jpg" alt="Bardiya National Park" class="offer-img">
                     <h3>Bardiya National Park</h3>
                     <p>One of Nepal's most pristine wildlife reserves, offering excellent opportunities to spot Bengal tigers, one-horned rhinos, and diverse wildlife.</p>
-                    <button class="offer-button">Explore Bardiya</button>
                 </div>
             <?php else: ?>
                 <?php foreach($destinations as $destination): ?>
@@ -122,7 +115,6 @@ $destinations = $pdo->query("SELECT * FROM destinations WHERE status = 'active' 
                     <img src="<?php echo $destination['image_path'] ?: 'img/default-destination.jpg'; ?>" alt="<?php echo htmlspecialchars($destination['name']); ?>" class="offer-img">
                     <h3><?php echo htmlspecialchars($destination['name']); ?></h3>
                     <p><?php echo htmlspecialchars($destination['description']); ?></p>
-                    <button class="offer-button" onclick="addToCart('destination', <?php echo $destination['id']; ?>, '<?php echo htmlspecialchars(addslashes($destination['name'])); ?>', '<?php echo htmlspecialchars(addslashes($destination['description'])); ?>', '<?php echo htmlspecialchars(addslashes($destination['image_path'] ?: 'img/default-destination.jpg')); ?>', 150)">Book Now</button>
                 </div>
                 <?php endforeach; ?>
             <?php endif; ?>

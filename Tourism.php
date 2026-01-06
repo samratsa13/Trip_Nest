@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once 'db_connection.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,7 +34,6 @@ session_start();
     
     <ul class="nav-links">
         <li><a href="#home" class="active">Home</a></li>
-        <li><a href="#special-offers">Special Offers</a></li>
         <li><a href="#itenary">Itinerary</a></li>
         <li><a href="destination.php">Destinations</a></li>
         <?php if (isset($_SESSION['user_id'])): ?>
@@ -76,26 +76,6 @@ session_start();
 
 
 
-   <section id="special-offers">
-    <h2 class="section-title">Special Offers</h2>
-    <p class="section-subtitle">Check out our exclusive travel packages designed to give you the best experience at amazing prices.</p>
-    
-    <div class="offers-container">
-        <?php
-        require_once 'db_connection.php';
-        $offers = $pdo->query("SELECT * FROM special_offers WHERE status = 'active' LIMIT 3")->fetchAll();
-        
-        foreach($offers as $offer):
-        ?>
-        <div class="offer-card">
-            <img src="<?php echo $offer['image_path'] ?: 'img/default-offer.jpg'; ?>" alt="<?php echo htmlspecialchars($offer['title']); ?>" class="offer-img">
-            <h3><?php echo htmlspecialchars($offer['title']); ?></h3>
-            <p><?php echo htmlspecialchars($offer['description']); ?></p>
-            <button class="offer-button" onclick="addToCart('offer', <?php echo $offer['id']; ?>, '<?php echo htmlspecialchars(addslashes($offer['title'])); ?>', '<?php echo htmlspecialchars(addslashes($offer['description'])); ?>', '<?php echo htmlspecialchars(addslashes($offer['image_path'] ?: 'img/default-offer.jpg')); ?>', 100)">Book Now</button>
-        </div>
-        <?php endforeach; ?>
-    </div>
-</section>
 
     <!-- Hotels Section -->
     <section id="hotels">
@@ -419,5 +399,8 @@ session_start();
         });
 
     </script>
+
+</body>
+</html>
 </body>
 </html>

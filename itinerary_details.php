@@ -366,7 +366,6 @@ $selected_day = isset($_GET['day']) ? intval($_GET['day']) : 0;
         
         <ul class="nav-links">
             <li><a href="Tourism.php">Home</a></li>
-            <li><a href="Tourism.php#special-offers">Special Offers</a></li>
             <li><a href="Tourism.php#itenary">Itinerary</a></li>
             <li><a href="destination.php">Destinations</a></li>
             <li><a href="dashboard.php?tab=bookings">Bookings</a></li>
