@@ -14,7 +14,6 @@ body {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-/* Unified Navigation - Based on bookings.php design */
 nav,
 .navbar {
     background: linear-gradient(90deg, #031881, #6f7ecb);

@@ -24,29 +24,26 @@ $PASSWORD_PATTERN = '/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,}$/'
 
 
 
-// password hashing gareko with sha256
-/* CUSTOM PASSWORD VERIFICATION FUNCTION */
-function customHashPassword($password, $salt = null, $rounds = 500)
+// password hashing gareko with sha256 password verify gareko
+// verify garera rehashing directly greko split garera original salt value 
+//store garera 
+
+function verifyCustomPassword($password, $stored, $rounds = 500)
 {
-    if (!$salt) {
-        $salt = bin2hex(random_bytes(16)); // 16 bytes salt
-    }
+    list($salt, $storedHash) = explode(':', $stored);
 
     $combined = $salt . $password;
 
     $hash = hash('sha256', $combined);
+
     for ($i = 0; $i < $rounds; $i++) {
         $hash = hash('sha256', $hash . $combined);
     }
 
-    return $salt . ':' . $hash;
+    return hash_equals($storedHash, $hash);
 }
 
-function verifyCustomPassword($password, $stored, $rounds = 500)
-{
-    list($salt, $hash) = explode(':', $stored);
-    return customHashPassword($password, $salt, $rounds) === $stored;
-}
+
 
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {

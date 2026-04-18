@@ -126,7 +126,7 @@ require_once 'db_connection.php';
                     <?php if (!empty($activity['description'])): ?>
                         <p><?php echo htmlspecialchars(substr($activity['description'], 0, 100)) . '...'; ?></p>
                     <?php endif; ?>
-                    <p style="font-size: 1.2rem; font-weight: 700; color: #031881; margin: 0.5rem 0;">NPR <?php echo number_format($activity['price_npr'], 2); ?></p>
+                    <!-- <p style="font-size: 1.2rem; font-weight: 700; color: #031881; margin: 0.5rem 0;">NPR <?php echo number_format($activity['price_npr'], 2); ?></p> -->
                     <a href="activities.php?id=<?php echo $activity['id']; ?>">
                         <button class="offer-button">View Details</button>
                     </a>
@@ -193,26 +193,13 @@ require_once 'db_connection.php';
     <!-- Footer -->
     <section id="footer">
         <div class="footer-content">
-            <!-- <div class="social-icons">
-                <a href="#"><i class="fab fa-facebook-f"></i></a>
-                <a href="#"><i class="fab fa-twitter"></i></a>
-                <a href="#"><i class="fab fa-instagram"></i></a>
-                <a href="#"><i class="fab fa-linkedin-in"></i></a>
-            </div> -->
+          
             <p>&copy; 2024 Trip Nest. All rights reserved.</p>
         </div>
     </section>
 
     <script>
-        // Navbar scroll effect
-        window.addEventListener('scroll', function() {
-            const navbar = document.getElementById('navbar');
-            if (window.scrollY > 50) {
-                navbar.classList.add('scrolled');
-            } else {
-                navbar.classList.remove('scrolled');
-            }
-        });
+      
 
         // Mobile menu toggle
         const menuBtn = document.querySelector('.menu-btn');
@@ -315,72 +302,6 @@ require_once 'db_connection.php';
             button.addEventListener('mouseleave', function() {
                 this.style.transform = 'translateY(0)';
             });
-        });
-
-        // Cart functionality
-        function addToCart(itemType, itemId, itemName, itemDescription, itemImage, itemPrice) {
-            <?php if (isset($_SESSION['user_id'])): ?>
-                const formData = new FormData();
-                formData.append('item_type', itemType);
-                formData.append('item_id', itemId);
-                formData.append('item_name', itemName);
-                formData.append('item_description', itemDescription);
-                formData.append('item_image', itemImage);
-                formData.append('item_price', itemPrice);
-                
-                fetch('add_to_cart.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Item added to cart!');
-                        updateCartCount();
-                    } else {
-                        alert(data.message || 'Error adding item to cart');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error adding item to cart');
-                });
-            <?php else: ?>
-                alert('Please login to add items to cart');
-                window.location.href = 'login.php';
-            <?php endif; ?>
-        }
-
-        function updateCartCount() {
-            <?php if (isset($_SESSION['user_id'])): ?>
-                fetch('get_cart_count.php')
-                    .then(response => response.json())
-                    .then(data => {
-                        const cartCount = document.getElementById('cartCount');
-                        if (cartCount) {
-                            if (data.count > 0) {
-                                cartCount.textContent = data.count;
-                                cartCount.style.display = 'inline-flex';
-                            } else {
-                                cartCount.style.display = 'none';
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error updating cart count:', error);
-                        const cartCount = document.getElementById('cartCount');
-                        if (cartCount) {
-                            cartCount.style.display = 'none';
-                        }
-                    });
-            <?php endif; ?>
-        }
-
-        // Update cart count on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            updateCartCount();
-            // Update cart count every 5 seconds
-            setInterval(updateCartCount, 5000);
         });
 
     </script>

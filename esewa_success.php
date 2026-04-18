@@ -47,11 +47,26 @@ session_start();
                     $conn = mysqli_connect("localhost", "root", "", "tripnest_db");
                     if ($conn) {
                         if ($type == 'room') {
-                            $sql = "UPDATE hotel_bookings SET status = 'pending' WHERE id = $id";
+                            // Check status to prevent double deduction
+                            $check_sql = "SELECT status, room_id, quantity FROM hotel_bookings WHERE id = $id";
+                            $result = mysqli_query($conn, $check_sql);
+                            if ($result && mysqli_num_rows($result) > 0) {
+                                $booking = mysqli_fetch_assoc($result);
+                                if ($booking['status'] == 'pending_payment') {
+                                    $sql = "UPDATE hotel_bookings SET status = 'pending' WHERE id = $id";
+                                    mysqli_query($conn, $sql);
+                                    
+                                    // Reduce stock count for that room type
+                                    $room_id = $booking['room_id'];
+                                    $qty = (int)$booking['quantity'];
+                                    $update_stock = "UPDATE hotel_rooms SET quantity = GREATEST(0, quantity - $qty) WHERE id = $room_id";
+                                    mysqli_query($conn, $update_stock);
+                                }
+                            }
                         } else {
                             $sql = "UPDATE activity_bookings SET status = 'pending' WHERE id = $id";
+                            mysqli_query($conn, $sql);
                         }
-                        mysqli_query($conn, $sql);
                         
                         // Remove from wishlist if applicable
                         if (isset($_GET['wishlist_id'])) {

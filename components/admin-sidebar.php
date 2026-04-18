@@ -7,7 +7,8 @@
         <li><a href="#" data-tab="destinations"><i class="fas fa-map-marker-alt"></i> <span>Destinations</span></a></li>
         <li><a href="#" data-tab="hotels"><i class="fas fa-hotel"></i> <span>Hotels</span></a></li>
         <li><a href="#" data-tab="activities"><i class="fas fa-hiking"></i> <span>Activities</span></a></li>
-        <li><a href="#" data-tab="bookings"><i class="fas fa-calendar-check"></i> <span>Bookings</span></a></li>
+        <li><a href="bookings.php" data-tab="bookings"><i class="fas fa-calendar-check"></i> <span>Bookings</span></a></li>
+        <li><a href="#" data-tab="room-stock"><i class="fas fa-bed"></i> <span>Room Stock</span></a></li>
         <li><a href="Tourism.php"><i class="fas fa-home"></i> <span>Back to Site</span></a></li>
         <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
     </ul>

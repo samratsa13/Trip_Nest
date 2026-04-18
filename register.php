@@ -1,5 +1,5 @@
 <?php
-// ✅ PHP code will run only when form is submitted
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $servername = "localhost";
     $username = "root";
@@ -11,7 +11,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // Validate and sanitize inputs
     $name = trim($_POST['name'] ?? '');
-    $dob = $_POST['dob'] ?? '';
     $address = trim($_POST['address'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -55,18 +54,6 @@ function customHashPassword($password, $salt = null, $rounds = 500)
         $errors['name'] = "Name cannot contain numbers.";
     } elseif (preg_match('/[^\w\s]/', $name)) {
         $errors['name'] = "Name cannot contain special characters.";
-    }
-    
-    // DOB validation: Cannot be today or future date
-    if (empty($dob)) {
-        $errors['dob'] = "Date of Birth is required.";
-    } else {
-        $today = new DateTime();
-        $birthdate = new DateTime($dob);
-        
-        if ($birthdate >= $today) {
-            $errors['dob'] = "Date of Birth cannot be today or a future date.";
-        }
     }
     
     // Address validation: Only letters, numbers, commas, and hyphens
@@ -130,9 +117,9 @@ function customHashPassword($password, $salt = null, $rounds = 500)
         } else {
             $hashed_password = customHashPassword($password, null, 500);
 
-            $stmt = $conn->prepare("INSERT INTO users (name, dob, address, phone, email, password) 
-                                    VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("ssssss", $name, $dob, $address, $phone, $email, $hashed_password);
+            $stmt = $conn->prepare("INSERT INTO users (name, address, phone, email, password) 
+                                    VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssss", $name, $address, $phone, $email, $hashed_password);
 
             if ($stmt->execute()) {
                 $success_message = "✅ Registration successful! <a href='login.php'>Login here</a>";
@@ -180,15 +167,6 @@ function customHashPassword($password, $salt = null, $rounds = 500)
                            title="No leading spaces, no numbers/special chars, no triple spaces">
                     <div id="nameError" class="error-msg">
                         <?php echo $errors['name'] ?? ''; ?>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="dob">DOB:</label>
-                    <input type="date" id="dob" name="dob" class="input-field" 
-                           value="<?php echo htmlspecialchars($dob ?? ''); ?>" required>
-                    <div id="dobError" class="error-msg">
-                        <?php echo $errors['dob'] ?? ''; ?>
                     </div>
                 </div>
             </div>
@@ -291,27 +269,6 @@ function customHashPassword($password, $salt = null, $rounds = 500)
             }
             
             nameError.innerText = "";
-        });
-
-        document.getElementById("dob").addEventListener("change", function() {
-            const dobError = document.getElementById("dobError");
-            
-            if (this.value === "") {
-                dobError.innerText = "❌ Please enter your Date of Birth.";
-                return;
-            }
-            
-            // Check if date is today or in the future
-            const today = new Date();
-            const selectedDate = new Date(this.value);
-            today.setHours(0, 0, 0, 0); // Reset time part for accurate comparison
-            
-            if (selectedDate >= today) {
-                dobError.innerText = "❌ Date of Birth cannot be today or a future date.";
-                return;
-            }
-            
-            dobError.innerText = "";
         });
 
         document.getElementById("address").addEventListener("input", function() {
@@ -461,7 +418,6 @@ function customHashPassword($password, $salt = null, $rounds = 500)
             
             // Validate all fields
             const name = document.getElementById("name");
-            const dob = document.getElementById("dob");
             const address = document.getElementById("address");
             const phone = document.getElementById("phone");
             const email = document.getElementById("email");
@@ -470,7 +426,6 @@ function customHashPassword($password, $salt = null, $rounds = 500)
             
             // Trigger validation for all fields
             name.dispatchEvent(new Event('input'));
-            dob.dispatchEvent(new Event('change'));
             address.dispatchEvent(new Event('input'));
             phone.dispatchEvent(new Event('input'));
             email.dispatchEvent(new Event('input'));

@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Title is required";
         } elseif (strlen($title) < 3 || strlen($title) > 100) {
             $errors[] = "Title must be 3-100 characters";
-        }
+                }
         
         if (empty($description)) {
             $errors[] = "Description is required";
@@ -240,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Destination name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Destination name must be 3-100 characters";
-        }
+                }
         
         if (empty($description)) {
             $errors[] = "Description is required";
@@ -328,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Hotel name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Hotel name must be 3-100 characters";
-        }
+                }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -374,14 +374,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, quantity, available) VALUES (?, ?, ?, ?, ?, ?)");
                             foreach ($rooms as $room) {
                                 if (!empty($room['room_type']) && !empty($room['ac_type']) && !empty($room['price_npr'])) {
+                                    $quantity = $room['quantity'] ?? 1;
                                     $room_stmt->execute([
                                         $hotel_id,
                                         $room['room_type'],
                                         $room['ac_type'],
                                         $room['price_npr'],
-                                        $room['quantity'] ?? 1,
-                                        $room['available'] ?? 1
+                                        $quantity,
+                                        $room['available'] ?? $quantity
                                     ]);
+                                    
+                                    // Auto-generate physical room units immediately for the stock overview
+                                    $room_id = $pdo->lastInsertId();
+                                    $type_initial = strtoupper(substr(preg_replace('/[^a-zA-Z]/', '', $room['room_type']), 0, 1) ?: 'R');
+                                    $ac_initial   = strtoupper(substr($room['ac_type'], 0, 1));
+                                    $prefix = $type_initial . $ac_initial . "-R" . $room_id . "-";
+                                    
+                                    $rn_stmt = $pdo->prepare("INSERT IGNORE INTO room_numbers (hotel_id, room_id, room_number, status) VALUES (?, ?, ?, 'available')");
+                                    for ($i = 1; $i <= $quantity; $i++) {
+                                        $rn_stmt->execute([$hotel_id, $room_id, $prefix . $i]);
+                                    }
                                 }
                             }
                         }
@@ -406,6 +418,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($hotel && !empty($hotel['image_path']) && file_exists($hotel['image_path'])) {
             unlink($hotel['image_path']);
         }
+        
+        $pdo->prepare("DELETE FROM room_numbers WHERE hotel_id = ?")->execute([$hotel_id]);
+        $pdo->prepare("DELETE FROM hotel_rooms WHERE hotel_id = ?")->execute([$hotel_id]);
         
         $stmt = $pdo->prepare("DELETE FROM hotels WHERE id = ?");
         if ($stmt->execute([$hotel_id])) {
@@ -443,7 +458,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Hotel name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Hotel name must be 3-100 characters";
-        }
+                }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -489,27 +504,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
             
             if ($update_success) {
-                // Update rooms - delete existing and insert new
+                // Update rooms without breaking foreign references
                 if (isset($_POST['edit_rooms_json'])) {
-                    // Delete existing rooms
-                    $delete_stmt = $pdo->prepare("DELETE FROM hotel_rooms WHERE hotel_id = ?");
-                    $delete_stmt->execute([$hotel_id]);
-                    
-                    // Insert new rooms
                     $rooms = json_decode($_POST['edit_rooms_json'], true);
-                    if (is_array($rooms) && !empty($rooms)) {
-                        $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, quantity, available) VALUES (?, ?, ?, ?, ?, ?)");
+                    if (is_array($rooms)) {
+                        $existing_ids = [];
                         foreach ($rooms as $room) {
                             if (!empty($room['room_type']) && !empty($room['ac_type']) && !empty($room['price_npr'])) {
-                                $room_stmt->execute([
-                                    $hotel_id,
-                                    $room['room_type'],
-                                    $room['ac_type'],
-                                    $room['price_npr'],
-                                    $room['quantity'] ?? 1,
-                                    $room['available'] ?? 1
-                                ]);
+                                $quantity = $room['quantity'] ?? 1;
+                                $room_id = (!empty($room['id'])) ? intval($room['id']) : 0;
+                                
+                                if ($room_id > 0) {
+                                    // Update existing room including its new quantity
+                                    $room_stmt = $pdo->prepare("UPDATE hotel_rooms SET room_type = ?, ac_type = ?, price_npr = ?, quantity = ?, available = ? WHERE id = ? AND hotel_id = ?");
+                                    $room_stmt->execute([$room['room_type'], $room['ac_type'], $room['price_npr'], $quantity, $room['available'] ?? 1, $room_id, $hotel_id]);
+                                    $existing_ids[] = $room_id;
+                                    
+                                    // We are no longer using room_numbers so we don't sync it.
+                                } else {
+                                    // Insert new room
+                                    $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, quantity, available) VALUES (?, ?, ?, ?, ?, ?)");
+                                    $room_stmt->execute([$hotel_id, $room['room_type'], $room['ac_type'], $room['price_npr'], $quantity, $room['available'] ?? 1]);
+                                    $existing_ids[] = $pdo->lastInsertId();
+                                }
                             }
+                        }
+                        
+                        // Disable removed rooms instead of hard deleting to prevent breaking existing bookings
+                        if (!empty($existing_ids)) {
+                            $placeholders = str_repeat('?,', count($existing_ids) - 1) . '?';
+                            $del_params = array_merge([$hotel_id], $existing_ids);
+                            $pdo->prepare("UPDATE hotel_rooms SET available = 0 WHERE hotel_id = ? AND id NOT IN ($placeholders)")->execute($del_params);
+                        } else {
+                            $pdo->prepare("UPDATE hotel_rooms SET available = 0 WHERE hotel_id = ?")->execute([$hotel_id]);
                         }
                     }
                 }
@@ -536,7 +563,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Activity name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Activity name must be 3-100 characters";
-        }
+                }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -595,7 +622,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Activity name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Activity name must be 3-100 characters";
-        }
+                }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -701,6 +728,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Add User
     if (isset($_POST['add_user'])) {
         $name = trim($_POST['user_name'] ?? '');
+        $address = trim($_POST['user_address'] ?? '');
         $email = trim($_POST['user_email'] ?? '');
         $phone = trim($_POST['user_phone'] ?? '');
         $password = $_POST['user_password'] ?? '';
@@ -719,6 +747,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Name cannot contain numbers";
         } elseif (preg_match('/[^\w\s]/', $name)) {
             $errors[] = "Name cannot contain special characters";
+        }
+        
+        if (empty($address)) {
+            $errors[] = "Address is required";
+        } elseif (!preg_match('/^[a-zA-Z0-9\s,\-]+$/', $address)) {
+            $errors[] = "Address can only contain letters, numbers, spaces, commas, and hyphens";
         }
         
         if (empty($email)) {
@@ -760,8 +794,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Hash password
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 
-                $stmt = $pdo->prepare("INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)");
-                if ($stmt->execute([$name, $email, $phone, $hashed_password, $role])) {
+                $stmt = $pdo->prepare("INSERT INTO users (name, address, email, phone, password, role) VALUES (?, ?, ?, ?, ?, ?)");
+                if ($stmt->execute([$name, $address, $email, $phone, $hashed_password, $role])) {
                     $user_success = "User added successfully!";
                 } else {
                     $user_error = "Error adding user!";
@@ -907,6 +941,16 @@ try {
         ORDER BY ab.created_at DESC")->fetchAll();
 } catch (PDOException $e) {
     $activity_bookings = [];
+}
+
+try {
+    $room_numbers = $pdo->query("SELECT rn.*, h.name as hotel_name, hr.room_type, hr.ac_type 
+        FROM room_numbers rn 
+        JOIN hotels h ON rn.hotel_id = h.id 
+        JOIN hotel_rooms hr ON rn.room_id = hr.id 
+        ORDER BY h.name ASC, hr.room_type ASC, hr.ac_type ASC, LENGTH(rn.room_number) ASC, rn.room_number ASC")->fetchAll();
+} catch (PDOException $e) {
+    $room_numbers = [];
 }
 ?>
 <!DOCTYPE html>
@@ -1362,12 +1406,34 @@ try {
 
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content active">
+            
+            <div class="time-filter-container" style="margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <label for="dashboard-time-filter" style="font-weight: 600; color: var(--primary); margin: 0;">Time Period:</label>
+                <select id="dashboard-time-filter" class="form-control" style="width: auto; display: inline-block; padding: 0.5rem; border-color: var(--primary);">
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="last_7_days">Last 7 Days</option>
+                    <option value="last_30_days">Last 30 Days</option>
+                    <option value="this_month">This Month</option>
+                    <option value="this_year">This Year</option>
+                    <option value="custom">Custom Range...</option>
+                </select>
+                
+                <div id="custom-date-range" style="display: none; align-items: center; gap: 1rem;">
+                    <input type="date" id="start-date" class="form-control" style="width: auto; padding: 0.5rem;">
+                    <span style="font-weight: 600; color: #666;">to</span>
+                    <input type="date" id="end-date" class="form-control" style="width: auto; padding: 0.5rem;">
+                    <button id="apply-custom-date" class="btn btn-primary" style="padding: 0.5rem 1rem;">Apply</button>
+                    <span id="date-error" style="color: red; font-size: 0.8rem; display: none;"></span>
+                </div>
+            </div>
+
             <?php include("components/admin-states.php") ?>
             
             <!-- Comprehensive Reports Section -->
             <div style="margin-top: 2rem;">
                 <h2 style="margin-bottom: 1.5rem; color: var(--primary);">📊 Comprehensive Reports</h2>
-                
+                                    
                 <!-- Revenue Overview -->
                 <div class="table-container" style="margin-bottom: 2rem;">
                     <div class="table-header">
@@ -1376,16 +1442,16 @@ try {
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
                         <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #031881, #6f7ecb); color: white; border-radius: 0.5rem;">
                             <h4 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Total Revenue</h4>
-                            <h2 style="margin: 0.5rem 0; font-size: 2rem;">NPR <?php echo number_format($total_revenue, 2); ?></h2>
+                            <h2 id="metric-total-revenue" style="margin: 0.5rem 0; font-size: 2rem;">NPR <?php echo number_format($total_revenue, 2); ?></h2>
                         </div>
 
                         <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
                             <h4 style="margin: 0; color: #666;">Hotel Bookings</h4>
-                            <h3 style="margin: 0.5rem 0; color: var(--secondary);">NPR <?php echo number_format($total_revenue_hotel, 2); ?></h3>
+                            <h3 id="metric-hotel-revenue" style="margin: 0.5rem 0; color: var(--secondary);">NPR <?php echo number_format($total_revenue_hotel, 2); ?></h3>
                         </div>
                         <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem;">
                             <h4 style="margin: 0; color: #666;">Activity Bookings</h4>
-                            <h3 style="margin: 0.5rem 0; color: #ff5722;">NPR <?php echo number_format($total_revenue_activity, 2); ?></h3>
+                            <h3 id="metric-activity-revenue" style="margin: 0.5rem 0; color: #ff5722;">NPR <?php echo number_format($total_revenue_activity, 2); ?></h3>
                         </div>
                     </div>
                 </div>
@@ -1399,7 +1465,7 @@ try {
                         </div>
                         <canvas id="bookingsTypeChart" style="max-height: 300px;"></canvas>
                     </div>
-                    
+
                     <!-- Booking Status Breakdown -->
                     <div class="table-container">
                         <div class="table-header">
@@ -1410,14 +1476,14 @@ try {
                 </div>
                 
                 
-                
-                <!-- Revenue Breakdown -->
-                <div class="table-container">
-                    <div class="table-header">
-                        <h3>Revenue Breakdown by Source</h3>
-                    </div>
-                    <canvas id="revenueChart" style="max-height: 300px;"></canvas>
-                </div>
+                    
+                     <!-- Revenue Breakdown -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Revenue Breakdown by Source</h3>
+                        </div>
+                        <canvas id="revenueChart" style="max-height: 300px;"></canvas>
+                                    </div>
             </div>
 
             <div class="table-container">
@@ -1474,6 +1540,7 @@ try {
                         <tr>
                             <th>ID</th>
                             <th>Name</th>
+                            <th>Address</th>
                             <th>Email</th>
                             <th>Phone</th>
                             <th>Role</th>
@@ -1486,6 +1553,7 @@ try {
                         <tr>
                             <td><?php echo $user['user_id']; ?></td>
                             <td><?php echo htmlspecialchars($user['name']); ?></td>
+                            <td><?php echo htmlspecialchars($user['address'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars($user['email']); ?></td>
                             <td><?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars($user['role']); ?></td>
@@ -1977,6 +2045,79 @@ try {
                 </table>
             </div>
         </div>
+        
+        <!-- Room Stock Tab -->
+        <div id="room-stock" class="tab-content">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Room Stock Overview</h3>
+                </div>
+                
+                <?php 
+                $rooms_query = $pdo->query("SELECT hr.id as room_id, hr.hotel_id, hr.room_type, hr.ac_type, hr.quantity as total_quantity, h.name as hotel_name 
+                    FROM hotel_rooms hr 
+                    JOIN hotels h ON hr.hotel_id = h.id 
+                    WHERE hr.available = 1 AND hr.quantity > 0
+                    ORDER BY h.name ASC, hr.room_type ASC, hr.ac_type ASC");
+                if ($rooms_query) {
+                    $rooms = $rooms_query->fetchAll(PDO::FETCH_ASSOC);
+                } else {
+                    $rooms = [];
+                }
+                ?>
+                
+                <?php if (empty($rooms)): ?>
+                    <div style="text-align: center; padding: 4rem 2rem; color: #666; background: white; border-radius: 8px; margin-top: 1rem;">
+                        <i class="fas fa-bed" style="font-size: 3rem; color: #ddd; margin-bottom: 1rem; display: block;"></i>
+                        No rooms available. Add hotels and categories first.
+                    </div>
+                <?php else: ?>
+                    <?php 
+                    $rooms_by_hotel = [];
+                    foreach($rooms as $room) {
+                        $rooms_by_hotel[$room['hotel_name']][] = $room;
+                    }
+                    ?>
+                    
+                    <?php foreach($rooms_by_hotel as $hotel_name => $hotel_rooms_list): ?>
+                        <div style="margin-top: 2rem; border: 1px solid #e1e4e8; border-radius: 10px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.02); overflow: hidden;">
+                            <div style="background: linear-gradient(to right, #f8f9fa, white); padding: 1.2rem 1.5rem; border-bottom: 1px solid #e1e4e8; display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="margin: 0; color: #2c3e50; font-size: 1.15rem; font-weight: 600;">
+                                    <i class="fas fa-building" style="margin-right: 0.6rem; color: var(--primary); opacity: 0.8;"></i>
+                                    <?php echo htmlspecialchars($hotel_name); ?>
+                                </h4>
+                                <?php 
+                                $total_units = 0;
+                                foreach($hotel_rooms_list as $r) $total_units += $r['total_quantity'];
+                                ?>
+                                <span style="font-size: 0.85rem; color: #495057; background: #e9ecef; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: 500;">
+                                    <?php echo $total_units; ?> Total Available
+                                </span>
+                            </div>
+                            
+                            <div style="padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
+                                <?php foreach($hotel_rooms_list as $room): 
+                                    $category_name = $room['room_type'];
+                                    if (!empty($room['ac_type'])) {
+                                        $category_name .= ' - ' . $room['ac_type'];
+                                    }
+                                    $total = $room['total_quantity'];
+                                ?>
+                                <div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 1.5rem; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 6px 12px rgba(0,0,0,0.08)';" onmouseout="this.style.transform='none'; this.style.boxShadow='none';">
+                                    <h5 style="margin: 0 0 1.2rem 0; color: #031881; font-size: 1.1rem; font-weight: 600; text-align: center; border-bottom: 2px solid #f1f3f5; padding-bottom: 0.8rem;"><?php echo htmlspecialchars($category_name); ?></h5>
+                                    
+                                    <div style="text-align: center; margin-bottom: 0.5rem;">
+                                        <span style="color: #666; font-size: 0.9rem;"><i class="fas fa-bed"></i> Total Rooms Available: </span>
+                                        <span style="font-size: 1.1rem; font-weight: 700; color: #333;"><?php echo $total; ?></span>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
     <!-- Itinerary Modal -->
@@ -2104,13 +2245,23 @@ try {
             </div>
             <form method="POST" id="userForm">
                 <input type="hidden" name="add_user" value="1">
-                <div class="form-group">
-                    <label for="user_name">Full Name *</label>
-                    <input type="text" id="user_name" name="user_name" class="form-control" 
-                           pattern="^(?!\s)(?!.*\s{3,})(?!.*\d)(?!.*_)(?!.*[^\w\s]).+$" 
-                           title="No leading spaces, no numbers/special chars, no triple spaces"
-                           required>
-                    <div id="user_name_error" class="field-error"></div>
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="user_name">Full Name *</label>
+                        <input type="text" id="user_name" name="user_name" class="form-control" 
+                               pattern="^(?!\s)(?!.*\s{3,})(?!.*\d)(?!.*_)(?!.*[^\w\s]).+$" 
+                               title="No leading spaces, no numbers/special chars, no triple spaces"
+                               required>
+                        <div id="user_name_error" class="field-error"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="user_address">Address *</label>
+                        <input type="text" id="user_address" name="user_address" class="form-control" 
+                               pattern="^[a-zA-Z0-9\s,\-]+$" 
+                               title="Letters, numbers, spaces, commas and hyphens only"
+                               required>
+                        <div id="user_address_error" class="field-error"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="user_email">Email Address *</label>
@@ -2517,7 +2668,7 @@ try {
                     container.innerHTML = '';
                     if (data.success && data.rooms.length > 0) {
                         data.rooms.forEach(room => {
-                            addEditRoomBlockWithData(room.room_type, room.ac_type, room.price_npr);
+                            addEditRoomBlockWithData(room.id, room.room_type, room.ac_type, room.price_npr, room.quantity);
                         });
                     } else {
                         container.innerHTML = '<p style="color: #666; font-style: italic;">No rooms added yet. Click "Add Room" to add rooms.</p>';
@@ -2531,7 +2682,7 @@ try {
         }
         
         // Add a room block with existing data for editing
-        function addEditRoomBlockWithData(roomType, acType, priceNpr) {
+        function addEditRoomBlockWithData(roomId, roomType, acType, priceNpr, quantity) {
             editRoomBlockCounter++;
             const container = document.getElementById('editRoomBlocksContainer');
             
@@ -2546,7 +2697,8 @@ try {
             roomBlock.style.padding = '1rem';
             roomBlock.style.backgroundColor = '#f9f9f9';
             roomBlock.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                    <input type="hidden" class="edit-room-id" value="${roomId || ''}">
                     <div>
                         <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Room Type *</label>
                         <input type="text" class="form-control edit-room-type" placeholder="e.g., Deluxe, Standard" 
@@ -2572,6 +2724,13 @@ try {
                                required>
                     </div>
                     <div>
+                        <label style="display: block; margin-bottom: 0.3rem; font-weight: 600;">Stock Qty *</label>
+                        <input type="number" class="form-control edit-room-quantity" min="1" 
+                               placeholder="1" 
+                               value="${quantity || 1}"
+                               required>
+                    </div>
+                    <div>
                         <button type="button" class="btn btn-danger btn-sm" onclick="removeEditRoomBlock('editRoomBlock_${editRoomBlockCounter}')">Remove</button>
                     </div>
                 </div>
@@ -2582,11 +2741,12 @@ try {
             roomBlock.querySelector('.edit-room-type').addEventListener('input', updateEditRoomsJson);
             roomBlock.querySelector('.edit-ac-type').addEventListener('change', updateEditRoomsJson);
             roomBlock.querySelector('.edit-room-price').addEventListener('input', updateEditRoomsJson);
+            roomBlock.querySelector('.edit-room-quantity').addEventListener('input', updateEditRoomsJson);
         }
         
         // Add empty room block for editing
         function addEditRoomBlock() {
-            addEditRoomBlockWithData('', '', '');
+            addEditRoomBlockWithData('', '', '', '', 1);
             updateEditRoomsJson();
         }
         
@@ -2609,15 +2769,19 @@ try {
             const rooms = [];
             
             roomBlocks.forEach(block => {
+                const id = block.querySelector('.edit-room-id').value;
                 const roomType = block.querySelector('.edit-room-type').value.trim();
                 const acType = block.querySelector('.edit-ac-type').value;
                 const price = block.querySelector('.edit-room-price').value;
-                
-                if (roomType && acType && price) {
+                const quantity = block.querySelector('.edit-room-quantity').value;
+                                
+                if (roomType && acType && price && quantity) {
                     rooms.push({
+                        id: id,
                         room_type: roomType,
                         ac_type: acType,
                         price_npr: parseFloat(price),
+                        quantity: parseInt(quantity),
                         available: 1
                     });
                 }
@@ -3170,13 +3334,13 @@ try {
             
             if (field.type === 'number' && value) {
                 const numValue = parseFloat(value);
-                if (isNaN(numValue) || numValue < 1) {
-                    showRoomFieldError(field, errorElement, 'Price must be at least NPR 1');
-                    return false;
-                }
-                if (numValue > 9999999.99) {
-                    showRoomFieldError(field, errorElement, 'Price cannot exceed NPR 9,999,999.99');
-                    return false;
+                                    if (isNaN(numValue) || numValue < 1) {
+                        showRoomFieldError(field, errorElement, 'Price must be at least NPR 1');
+                        return false;
+                    }
+                    if (numValue > 9999999.99) {
+                        showRoomFieldError(field, errorElement, 'Price cannot exceed NPR 9,999,999.99');
+                                             return false;
                 }
             }
             
@@ -3438,6 +3602,185 @@ try {
             
             // Initialize all charts
             initializeAllCharts();
+            
+            // Dashboard Time Filter Logic
+            const timeFilter = document.getElementById('dashboard-time-filter');
+            const customDateRange = document.getElementById('custom-date-range');
+            const applyCustomBtn = document.getElementById('apply-custom-date');
+            
+            if (timeFilter) {
+                timeFilter.addEventListener('change', function() {
+                    const filter = this.value;
+                    if (filter === 'custom') {
+                        customDateRange.style.display = 'flex';
+                    } else {
+                        customDateRange.style.display = 'none';
+                        fetchDashboardData(filter);
+                    }
+                });
+            }
+            
+            if (applyCustomBtn) {
+                const startDateInput = document.getElementById('start-date');
+                const endDateInput = document.getElementById('end-date');
+                const errorSpan = document.getElementById('date-error');
+                
+                // Real-time validation
+                function validateCustomDates() {
+                    const startDateVal = startDateInput.value;
+                    const endDateVal = endDateInput.value;
+                    
+                    if (!startDateVal && !endDateVal) {
+                        errorSpan.style.display = "none";
+                        return true;
+                    }
+                    
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    
+                    const threeYearsAgo = new Date();
+                    threeYearsAgo.setFullYear(today.getFullYear() - 3);
+                    threeYearsAgo.setHours(0,0,0,0);
+                    
+                    // Validate start date
+                    if (startDateVal) {
+                        const sDate = new Date(startDateVal);
+                        sDate.setHours(0,0,0,0);
+                        if (sDate < threeYearsAgo) {
+                            errorSpan.textContent = "❌ Start date cannot exceed 3 years in the past";
+                            errorSpan.style.color = "red";
+                            errorSpan.style.display = "block";
+                            return false;
+                        }
+                        if (sDate > today) {
+                            errorSpan.textContent = "❌ Start date cannot be in the future";
+                            errorSpan.style.color = "red";
+                            errorSpan.style.display = "block";
+                            return false;
+                        }
+                    }
+                    
+                    // Validate end date
+                    if (endDateVal) {
+                        const eDate = new Date(endDateVal);
+                        eDate.setHours(0,0,0,0);
+                        if (eDate > today) {
+                            errorSpan.textContent = "❌ End date cannot exceed today";
+                            errorSpan.style.color = "red";
+                            errorSpan.style.display = "block";
+                            return false;
+                        }
+                        if (eDate < threeYearsAgo) {
+                            errorSpan.textContent = "❌ End date cannot exceed 3 years in the past";
+                            errorSpan.style.color = "red";
+                            errorSpan.style.display = "block";
+                            return false;
+                        }
+                    }
+                    
+                    // Validate combination
+                    if (startDateVal && endDateVal) {
+                        const sDate = new Date(startDateVal);
+                        sDate.setHours(0,0,0,0);
+                        const eDate = new Date(endDateVal);
+                        eDate.setHours(0,0,0,0);
+                        
+                        if (sDate > eDate) {
+                            errorSpan.textContent = "❌ Start date must be carefully placed before end date";
+                            errorSpan.style.color = "red";
+                            errorSpan.style.display = "block";
+                            return false;
+                        } else {
+                            errorSpan.textContent = "✅ Valid range";
+                            errorSpan.style.color = "green";
+                            errorSpan.style.display = "block";
+                            return true;
+                        }
+                    }
+                    
+                    errorSpan.style.display = "none";
+                    return true;
+                }
+                
+                if (startDateInput) startDateInput.addEventListener('change', validateCustomDates);
+                if (endDateInput) endDateInput.addEventListener('change', validateCustomDates);
+
+                applyCustomBtn.addEventListener('click', function() {
+                    const startDate = startDateInput.value;
+                    const endDate = endDateInput.value;
+                    
+                    if (!startDate || !endDate) {
+                        errorSpan.textContent = "❌ Please select both dates";
+                        errorSpan.style.color = "red";
+                        errorSpan.style.display = "block";
+                        return;
+                    }
+                    
+                    if (!validateCustomDates()) return;
+                    
+                    fetchDashboardData('custom', startDate, endDate);
+                });
+            }
+            
+            function fetchDashboardData(filter, startDate = '', endDate = '') {
+                const url = `admin_dashboard_data.php?time_filter=${filter}&start_date=${startDate}&end_date=${endDate}`;
+                
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            console.error('Error fetching dashboard data:', data.error);
+                            return;
+                        }
+                        
+                        // Update simple metrics
+                        if (document.getElementById('metric-users')) document.getElementById('metric-users').innerText = data.users;
+                        if (document.getElementById('metric-itineraries')) document.getElementById('metric-itineraries').innerText = data.itineraries;
+                        if (document.getElementById('metric-destinations')) document.getElementById('metric-destinations').innerText = data.destinations;
+                        if (document.getElementById('metric-hotels')) document.getElementById('metric-hotels').innerText = data.hotels;
+                        if (document.getElementById('metric-activities')) document.getElementById('metric-activities').innerText = data.activities;
+                        if (document.getElementById('metric-bookings')) document.getElementById('metric-bookings').innerText = data.total_bookings;
+                        
+                        // Update Revenue
+                        if (document.getElementById('metric-total-revenue')) 
+                            document.getElementById('metric-total-revenue').innerText = 'NPR ' + parseFloat(data.total_revenue).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        if (document.getElementById('metric-hotel-revenue')) 
+                            document.getElementById('metric-hotel-revenue').innerText = 'NPR ' + parseFloat(data.revenue_hotel).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        if (document.getElementById('metric-activity-revenue')) 
+                            document.getElementById('metric-activity-revenue').innerText = 'NPR ' + parseFloat(data.revenue_activity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            
+                        // Update charts
+                        updateCharts(data);
+                    })
+                    .catch(error => console.error('Fetch error:', error));
+            }
+            
+            function updateCharts(data) {
+                // Bookings Type Chart
+                let typeChart = Chart.getChart('bookingsTypeChart');
+                if (typeChart) {
+                    typeChart.data.datasets[0].data = [data.hotel_bookings, data.activity_bookings];
+                    typeChart.update();
+                }
+                
+                // Status Chart
+                let statusChart = Chart.getChart('bookingStatusChart');
+                if (statusChart) {
+                    statusChart.data.datasets[0].data = [
+                        data.booking_status.pending, 
+                        data.booking_status.approved, 
+                        data.booking_status.rejected
+                    ];
+                    statusChart.update();
+                }
+                
+                // Revenue Chart
+                let revChart = Chart.getChart('revenueChart');
+                if (revChart) {
+                    revChart.data.datasets[0].data = [data.revenue_hotel, data.revenue_activity];
+                    revChart.update();
+                }
+            }
         });
         
         // Initialize all dashboard charts
@@ -3708,9 +4051,9 @@ try {
                     if (hasError) {
                         return false;
                     }
-                });
-            });
+                                });
         });
+    });
     </script>
 </body>
 </html>

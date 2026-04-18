@@ -2,7 +2,7 @@
     <div class="card users">
         <div class="card-header">
             <div>
-                <h3><?php echo $user_count; ?></h3>
+                <h3 id="metric-users"><?php echo $user_count; ?></h3>
                 <p>Total Users</p>
             </div>
             <div class="card-icon">
@@ -25,7 +25,7 @@
     <div class="card itineraries">
         <div class="card-header">
             <div>
-                <h3><?php echo $itinerary_count; ?></h3>
+                <h3 id="metric-itineraries"><?php echo $itinerary_count; ?></h3>
                 <p>Popular Itineraries</p>
             </div>
             <div class="card-icon">
@@ -37,7 +37,7 @@
     <div class="card destinations">
         <div class="card-header">
             <div>
-                <h3><?php echo $destination_count; ?></h3>
+                <h3 id="metric-destinations"><?php echo $destination_count; ?></h3>
                 <p>Destinations</p>
             </div>
             <div class="card-icon">
@@ -49,7 +49,7 @@
     <div class="card hotels">
         <div class="card-header">
             <div>
-                <h3><?php echo $hotel_count; ?></h3>
+                <h3 id="metric-hotels"><?php echo $hotel_count; ?></h3>
                 <p>Hotels</p>
             </div>
             <div class="card-icon">
@@ -61,7 +61,7 @@
     <div class="card activities">
         <div class="card-header">
             <div>
-                <h3><?php echo $activity_count; ?></h3>
+                <h3 id="metric-activities"><?php echo $activity_count; ?></h3>
                 <p>Activities</p>
             </div>
             <div class="card-icon">
@@ -73,7 +73,7 @@
     <div class="card bookings">
         <div class="card-header">
             <div>
-                <h3><?php echo $total_bookings; ?></h3>
+                <h3 id="metric-bookings"><?php echo $total_bookings; ?></h3>
                 <p>Total Bookings</p>
             </div>
             <div class="card-icon">

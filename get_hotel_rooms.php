@@ -15,7 +15,7 @@ if (isset($_GET['hotel_id'])) {
     $hotel_id = intval($_GET['hotel_id']);
     
     try {
-        $stmt = $pdo->prepare("SELECT id, room_type, ac_type, price_npr, available FROM hotel_rooms WHERE hotel_id = ? ORDER BY room_type, ac_type");
+        $stmt = $pdo->prepare("SELECT id, room_type, ac_type, price_npr, quantity, available FROM hotel_rooms WHERE hotel_id = ? ORDER BY room_type, ac_type");
         $stmt->execute([$hotel_id]);
         $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
         

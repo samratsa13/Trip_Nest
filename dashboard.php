@@ -29,17 +29,16 @@ if ($conn->connect_error) {
     die("Database Connection failed: " . $conn->connect_error);
 }
 
-$stmt = $conn->prepare("SELECT name, dob, address, phone, email, role FROM users WHERE user_id = ?");
+$stmt = $conn->prepare("SELECT name, address, phone, email, role FROM users WHERE user_id = ?");
 $stmt->bind_param("i", $_SESSION['user_id']);
 $stmt->execute();
-$stmt->bind_result($name, $dob, $address, $phone, $email, $user_role);
+$stmt->bind_result($name, $address, $phone, $email, $user_role);
 $stmt->fetch();
 $stmt->close();
 
 // Handle profile update
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
     $name = trim($_POST['name'] ?? '');
-    $dob = $_POST['dob'] ?? '';
     $address = trim($_POST['address'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $new_email = trim($_POST['email'] ?? '');
@@ -49,16 +48,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
         $errors['name'] = "Name is required.";
     } elseif (preg_match('/^\s/', $name)) {
         $errors['name'] = "Name cannot start with a space.";
-    }
-    
-    if (empty($dob)) {
-        $errors['dob'] = "Date of Birth is required.";
-    } else {
-        $today = new DateTime();
-        $birthdate = new DateTime($dob);
-        if ($birthdate >= $today) {
-            $errors['dob'] = "Date of Birth cannot be today or a future date.";
-        }
+    } elseif (preg_match('/\s{3,}/', $name)) {
+        $errors['name'] = "Name cannot have more than two consecutive spaces.";
+    } elseif (preg_match('/[0-9]/', $name)) {
+        $errors['name'] = "Name cannot contain numbers.";
+    } elseif (preg_match('/[^\w\s]/', $name)) {
+        $errors['name'] = "Name cannot contain special characters.";
     }
     
     if (empty($address)) {
@@ -76,7 +71,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
     if (empty($new_email)) {
         $errors['email'] = "Email is required.";
     } elseif (!preg_match('/^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$/', $new_email)) {
-        $errors['email'] = "Email format is invalid.";
+        $errors['email'] = "Email must start with a letter, can only contain one dot before @, and domain must be letters only.";
     }
     
     // Check if email is already taken by another user
@@ -93,8 +88,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_profile'])) {
     }
     
     if (empty($errors)) {
-        $update_stmt = $conn->prepare("UPDATE users SET name = ?, dob = ?, address = ?, phone = ?, email = ? WHERE user_id = ?");
-        $update_stmt->bind_param("sssssi", $name, $dob, $address, $phone, $new_email, $_SESSION['user_id']);
+        $update_stmt = $conn->prepare("UPDATE users SET name = ?, address = ?, phone = ?, email = ? WHERE user_id = ?");
+        $update_stmt->bind_param("ssssi", $name, $address, $phone, $new_email, $_SESSION['user_id']);
         
         if ($update_stmt->execute()) {
             $success_message = "Profile updated successfully!";
@@ -305,48 +300,48 @@ $conn->close();
             <div class="error-msg"><?php echo $errors['general']; ?></div>
         <?php endif; ?>
         
-        <form method="POST" class="profile-form">
+        <form method="POST" id="profileForm" class="profile-form" novalidate>
             <div class="form-row">
                 <div class="form-group">
                     <label for="name">Full Name:</label>
-                    <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($name); ?>" required>
-                    <?php if (!empty($errors['name'])): ?>
-                        <div class="error-msg"><?php echo $errors['name']; ?></div>
-                    <?php endif; ?>
+                    <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($name); ?>" required
+                           pattern="^(?!\s)(?!.*\s{3,})(?!.*\d)(?!.*_)(?!.*[^\w\s]).+$"
+                           title="No leading spaces, no numbers/special chars, no triple spaces">
+                    <div id="nameError" class="error-msg">
+                        <?php echo $errors['name'] ?? ''; ?>
+                    </div>
                 </div>
                 
                 <div class="form-group">
-                    <label for="dob">Date of Birth:</label>
-                    <input type="date" id="dob" name="dob" value="<?php echo htmlspecialchars($dob); ?>" required>
-                    <?php if (!empty($errors['dob'])): ?>
-                        <div class="error-msg"><?php echo $errors['dob']; ?></div>
-                    <?php endif; ?>
+                    <label for="address">Address:</label>
+                    <input type="text" id="address" name="address" value="<?php echo htmlspecialchars($address); ?>" required
+                           pattern="^[a-zA-Z0-9\s,\-]+$"
+                           title="Letters, numbers, spaces, commas and hyphens only">
+                    <div id="addressError" class="error-msg">
+                        <?php echo $errors['address'] ?? ''; ?>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="address">Address:</label>
-                <textarea id="address" name="address" required><?php echo htmlspecialchars($address); ?></textarea>
-                <?php if (!empty($errors['address'])): ?>
-                    <div class="error-msg"><?php echo $errors['address']; ?></div>
-                <?php endif; ?>
             </div>
             
             <div class="form-row">
                 <div class="form-group">
                     <label for="phone">Phone:</label>
-                    <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($phone); ?>" required>
-                    <?php if (!empty($errors['phone'])): ?>
-                        <div class="error-msg"><?php echo $errors['phone']; ?></div>
-                    <?php endif; ?>
+                    <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($phone); ?>" required
+                           pattern="^(97|98)[0-9]{8}$"
+                           title="Must start with 97 or 98 and be exactly 10 digits">
+                    <div id="phoneError" class="error-msg">
+                        <?php echo $errors['phone'] ?? ''; ?>
+                    </div>
                 </div>
                 
                 <div class="form-group">
                     <label for="email">Email:</label>
-                    <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($email); ?>" required>
-                    <?php if (!empty($errors['email'])): ?>
-                        <div class="error-msg"><?php echo $errors['email']; ?></div>
-                    <?php endif; ?>
+                    <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($email); ?>" required
+                           pattern="^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$"
+                           title="Start with letter, one dot max before @, letters only domain">
+                    <div id="emailError" class="error-msg">
+                        <?php echo $errors['email'] ?? ''; ?>
+                    </div>
                 </div>
             </div>
             
@@ -360,5 +355,147 @@ $conn->close();
             </div>
         </form>
     </div>
+    <script>
+        // ✅ Real-time inline validation (adapted from register.php)
+        document.getElementById("name").addEventListener("input", function() {
+            const nameError = document.getElementById("nameError");
+            if (this.value.trim() === "") {
+                nameError.innerText = "❌ Name is required.";
+                return;
+            }
+            
+            // Check if starts with space
+            if (/^\s/.test(this.value)) {
+                nameError.innerText = "❌ Name cannot start with a space.";
+                return;
+            }
+            
+            // Check for more than two consecutive spaces
+            if (/\s{3,}/.test(this.value)) {
+                nameError.innerText = "❌ Name cannot have more than two consecutive spaces.";
+                return;
+            }
+            
+            // Check for numbers
+            if (/[0-9]/.test(this.value)) {
+                nameError.innerText = "❌ Name cannot contain numbers.";
+                return;
+            }
+            
+            // Check for special characters (except spaces)
+            if (/[^\w\s]/.test(this.value)) {
+                nameError.innerText = "❌ Name cannot contain special characters.";
+                return;
+            }
+            
+            nameError.innerText = "";
+        });
+
+        document.getElementById("address").addEventListener("input", function() {
+            const addressError = document.getElementById("addressError");
+            if (this.value.trim() === "") {
+                addressError.innerText = "❌ Address is required.";
+                return;
+            }
+            
+            // Check for valid characters (letters, numbers, spaces, commas, hyphens)
+            if (!/^[a-zA-Z0-9\s,\-]+$/.test(this.value)) {
+                addressError.innerText = "❌ Address can only contain letters, numbers, spaces, commas, and hyphens.";
+                return;
+            }
+            
+            addressError.innerText = "";
+        });
+
+        document.getElementById("phone").addEventListener("input", function() {
+            const phoneError = document.getElementById("phoneError");
+            
+            // Remove any non-digit characters visually
+            this.value = this.value.replace(/\D/g, '');
+
+            if (this.value === "") {
+                phoneError.innerText = "❌ Phone number is required.";
+                return;
+            }
+            
+            // Check if starts with 97 or 98 and is exactly 10 digits
+            if (!/^(97|98)[0-9]{8}$/.test(this.value)) {
+                phoneError.innerText = "❌ Phone number must start with 97 or 98 and be exactly 10 digits.";
+                return;
+            }
+            
+            phoneError.innerText = "";
+        });
+
+        document.getElementById("email").addEventListener("input", function() {
+            const emailError = document.getElementById("emailError");
+            if (this.value.trim() === "") {
+                emailError.innerText = "❌ Email is required.";
+                return;
+            }
+            
+            // Check if starts with letter
+            if (!/^[a-zA-Z]/.test(this.value)) {
+                emailError.innerText = "❌ Email must start with a letter.";
+                return;
+            }
+            
+            // Check for more than one dot before @
+            const localPart = this.value.split('@')[0];
+            if ((localPart.match(/\./g) || []).length > 1) {
+                emailError.innerText = "❌ Email can only contain one dot before @.";
+                return;
+            }
+            
+            // Check for spaces
+            if (/\s/.test(this.value)) {
+                emailError.innerText = "❌ Email cannot contain spaces.";
+                return;
+            }
+            
+            // Check for valid characters (letters, numbers, _, -, .)
+            if (!/^[a-zA-Z0-9_\-\.]+@[a-zA-Z]+\.[a-zA-Z]{2,}$/.test(this.value)) {
+                emailError.innerText = "❌ Email format is invalid. Only letters, numbers, hyphens, and underscores are allowed before @.";
+                return;
+            }
+            
+            emailError.innerText = "";
+        });
+
+        // Form submission validation
+        document.getElementById("profileForm").addEventListener("submit", function(event) {
+            let isValid = true;
+            
+            // Validate all fields
+            const name = document.getElementById("name");
+            const address = document.getElementById("address");
+            const phone = document.getElementById("phone");
+            const email = document.getElementById("email");
+            
+            // Trigger validation for all fields
+            name.dispatchEvent(new Event('input'));
+            address.dispatchEvent(new Event('input'));
+            phone.dispatchEvent(new Event('input'));
+            email.dispatchEvent(new Event('input'));
+            
+            // Check if any errors exist
+            const errorElements = document.querySelectorAll('.error-msg');
+            for (let i = 0; i < errorElements.length; i++) {
+                if (errorElements[i].innerText !== "" && errorElements[i].innerText.includes("❌")) {
+                    isValid = false;
+                    break;
+                }
+            }
+            
+            if (!isValid) {
+                event.preventDefault();
+                // Scroll to first error
+                const firstError = document.querySelector('.error-msg:not(:empty)');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
+    </script>
 </body>
 </html>

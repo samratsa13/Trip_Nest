@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['book_hotel'])) {
             
             if ($room) {
                 // Check availability
-                $check_stmt = $pdo->prepare("SELECT COUNT(*) FROM hotel_bookings 
+                $check_stmt = $pdo->prepare("SELECT IFNULL(SUM(quantity), 0) FROM hotel_bookings 
                     WHERE room_id = ? 
                     AND status != 'rejected' 
                     AND NOT (check_out <= ? OR check_in >= ?)");
@@ -183,7 +183,7 @@ if (isset($_GET['id'])) {
     $selected_hotel = $stmt->fetch();
     
     if ($selected_hotel) {
-        $rooms_stmt = $pdo->prepare("SELECT * FROM hotel_rooms WHERE hotel_id = ? ORDER BY room_type, ac_type");
+        $rooms_stmt = $pdo->prepare("SELECT * FROM hotel_rooms WHERE hotel_id = ? AND quantity > 0 AND available = 1 ORDER BY room_type, ac_type");
         $rooms_stmt->execute([$hotel_id]);
         $hotel_rooms = $rooms_stmt->fetchAll();
     }
@@ -480,6 +480,7 @@ if (isset($_GET['id'])) {
                         <div class="room-card">
                             <div class="room-info">
                                 <h4><?php echo htmlspecialchars($room['room_type']); ?> - <?php echo htmlspecialchars($room['ac_type']); ?></h4>
+                                <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;"><i class="fas fa-bed"></i> Total Rooms Available: <strong><?php echo htmlspecialchars($room['quantity']); ?></strong></p>
                             </div>
                             <div>
                                 <div class="room-price">NPR <?php echo number_format($room['price_npr'], 2); ?>/night</div>

@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Strict Email Validation (No +, /, \, " etc allowed)
     // Allowed: letters, numbers, dot, underscore, dash, @
-    if (!preg_match("/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", $guest_email)) {
+    if (!preg_match("^(?!.*\.\.)[A-Za-z0-9]+([._%+-]?[A-Za-z0-9]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$", $guest_email)) {
         $errors[] = "Email invalid or contains restricted symbols (+, /, \\, \", etc). Only letters, numbers, ., -, _ allowed.";
     } elseif (preg_match("/^\s/", $guest_email)) {
         $errors[] = "Email cannot start with a space.";
@@ -90,16 +90,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $nights = (strtotime($check_out) - strtotime($check_in)) / (60 * 60 * 24);
                 $total_price = $item['price_npr'] * $nights * $quantity;
                 
-                // Insert Pending Booking
-                $hotel_id = $item['hotel_id'];
-                $insert_sql = "INSERT INTO hotel_bookings 
-                    (user_id, hotel_id, room_id, check_in, check_out, guest_name, guest_email, guest_phone, total_price_npr, quantity, status) 
-                    VALUES ($user_id, $hotel_id, $item_id, '$check_in', '$check_out', '$guest_name', '$guest_email', '$guest_phone', $total_price, $quantity, 'pending_payment')";
+                // Check physical availability
+                $count_sql = "SELECT quantity FROM hotel_rooms WHERE id = $item_id";
+                $count_result = mysqli_query($conn, $count_sql);
+                $room_row = mysqli_fetch_assoc($count_result);
+                $total_available_now = $room_row ? (int)$room_row['quantity'] : 0;
                 
-                if (mysqli_query($conn, $insert_sql)) {
-                    $booking_id = mysqli_insert_id($conn);
+                if ($total_available_now == 0) {
+                    $error_msg = "Sorry, this room is currently fully booked.";
+                } elseif ($quantity > $total_available_now) {
+                    $error_msg = "Only " . $total_available_now . " room(s) currently available. You requested " . $quantity . ".";
                 } else {
-                    $error_msg = "Database Error: " . mysqli_error($conn);
+                    // Insert Pending Booking without room_number logic
+                    $hotel_id = $item['hotel_id'];
+                    $insert_sql = "INSERT INTO hotel_bookings 
+                        (user_id, hotel_id, room_id, room_number, check_in, check_out, guest_name, guest_email, guest_phone, total_price_npr, quantity, status) 
+                        VALUES ($user_id, $hotel_id, $item_id, NULL, '$check_in', '$check_out', '$guest_name', '$guest_email', '$guest_phone', $total_price, $quantity, 'pending_payment')";
+                    
+                    if (mysqli_query($conn, $insert_sql)) {
+                        $booking_id = mysqli_insert_id($conn);
+                    } else {
+                        $error_msg = "Database Error: " . mysqli_error($conn);
+                    }
                 }
             }
         } elseif ($item_type == 'activity') {
@@ -259,15 +271,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <div class="form-group">
                         <label>Check-in</label>
                         <input type="date" name="check_in" id="check_in" required min="<?php echo date('Y-m-d'); ?>">
+                        <small id="check_in_error" class="field-error"></small>
                     </div>
                     <div class="form-group">
                         <label>Check-out</label>
                         <input type="date" name="check_out" id="check_out" required min="<?php echo date('Y-m-d'); ?>">
+                        <small id="check_out_error" class="field-error"></small>
                     </div>
                 <?php else: ?>
                     <div class="form-group">
                         <label>Date</label>
-                        <input type="date" name="booking_date" required min="<?php echo date('Y-m-d'); ?>">
+                        <input type="date" name="booking_date" id="booking_date" required min="<?php echo date('Y-m-d'); ?>">
+                        <small id="booking_date_error" class="field-error"></small>
                     </div>
                 <?php endif; ?>
 
@@ -372,7 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 
                 // Check for restricted symbols (+, /, \, ", etc)
                 if (/[+\/\\"']/.test(val)) {
-                    emailError.textContent = "❌ Email cannot contain +, /, \\, or quotes.";
+                    emailError.textContent = "❌ Email cannot contain +, /, \\,=, or quotes.";
                     return;
                 }
                 
@@ -438,6 +453,107 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             });
         }
 
+        // ✅ Real-time Date Validation
+        const checkInInput = document.getElementById('check_in');
+        const checkOutInput = document.getElementById('check_out');
+        const checkInError = document.getElementById('check_in_error');
+        const checkOutError = document.getElementById('check_out_error');
+        
+        const bookingDateInput = document.getElementById('booking_date');
+        const bookingDateError = document.getElementById('booking_date_error');
+
+        function validateDates() {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            const maxDate = new Date();
+            maxDate.setFullYear(today.getFullYear() + 1);
+
+            let isValid = true;
+
+            if (type === 'room') {
+                if (!checkInInput || !checkOutInput) return true;
+
+                // Reset errors initially
+                if (checkInError) { checkInError.textContent = ""; checkInError.style.color = "red"; }
+                if (checkOutError) { checkOutError.textContent = ""; checkOutError.style.color = "red"; }
+
+                const checkInVal = checkInInput.value;
+                const checkOutVal = checkOutInput.value;
+
+                if (checkInVal) {
+                    const startDate = new Date(checkInVal);
+                    startDate.setHours(0,0,0,0);
+
+                    if (startDate < today) {
+                        if (checkInError) checkInError.textContent = "❌ Check-in date cannot be in the past.";
+                        isValid = false;
+                    } else if (startDate > maxDate) {
+                        if (checkInError) checkInError.textContent = "❌ Date cannot exceed 1 year from today.";
+                        isValid = false;
+                    } else {
+                        if (checkInError) { checkInError.textContent = "✅ Valid"; checkInError.style.color = "green"; }
+                    }
+                }
+
+                if (checkOutVal) {
+                    const endDate = new Date(checkOutVal);
+                    endDate.setHours(0,0,0,0);
+
+                    if (endDate < today) {
+                        if (checkOutError) checkOutError.textContent = "❌ Check-out date cannot be in the past.";
+                        isValid = false;
+                    } else if (endDate > maxDate) {
+                        if (checkOutError) checkOutError.textContent = "❌ Date cannot exceed 1 year from today.";
+                        isValid = false;
+                    } else {
+                        // Check against start date if start date exists
+                        if (checkInVal) {
+                            const startDate = new Date(checkInVal);
+                            startDate.setHours(0,0,0,0);
+                            if (endDate <= startDate) {
+                                if (checkOutError) {
+                                    checkOutError.textContent = "❌ Check-out date must be after check-in date.";
+                                    checkOutError.style.color = "red";
+                                }
+                                isValid = false;
+                            } else {
+                                if (checkOutError) { checkOutError.textContent = "✅ Valid"; checkOutError.style.color = "green"; }
+                            }
+                        } else {
+                            if (checkOutError) { checkOutError.textContent = "✅ Valid"; checkOutError.style.color = "green"; }
+                        }
+                    }
+                }
+            } else {
+                // Activity / Itinerary
+                if (!bookingDateInput) return true;
+                
+                if (bookingDateError) { bookingDateError.textContent = ""; bookingDateError.style.color = "red"; }
+                
+                const bookingVal = bookingDateInput.value;
+                if (bookingVal) {
+                    const bDate = new Date(bookingVal);
+                    bDate.setHours(0,0,0,0);
+                    
+                    if (bDate < today) {
+                        if (bookingDateError) bookingDateError.textContent = "❌ Booking date cannot be in the past.";
+                        isValid = false;
+                    } else if (bDate > maxDate) {
+                        if (bookingDateError) bookingDateError.textContent = "❌ Date cannot exceed 1 year from today.";
+                        isValid = false;
+                    } else {
+                        if (bookingDateError) { bookingDateError.textContent = "✅ Valid"; bookingDateError.style.color = "green"; }
+                    }
+                }
+            }
+            return isValid;
+        }
+
+        if (checkInInput) checkInInput.addEventListener('change', validateDates);
+        if (checkOutInput) checkOutInput.addEventListener('change', validateDates);
+        if (bookingDateInput) bookingDateInput.addEventListener('change', validateDates);
+
         // ✅ Enhanced Form Validation (from register.php)
         function validateForm() {
             let isValid = true;
@@ -447,6 +563,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if (emailInput) emailInput.dispatchEvent(new Event('input'));
             if (phoneInput) phoneInput.dispatchEvent(new Event('input'));
             if (quantityInput) quantityInput.dispatchEvent(new Event('input'));
+            
+            // Trigger date validation
+            if (type === 'room') {
+                if (checkInInput) checkInInput.dispatchEvent(new Event('change'));
+                if (checkOutInput) checkOutInput.dispatchEvent(new Event('change'));
+            } else {
+                if (bookingDateInput) bookingDateInput.dispatchEvent(new Event('change'));
+            }
             
             // Check if any errors exist
             const errorElements = document.querySelectorAll('.field-error');
@@ -465,22 +589,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
                 return false;
-            }
-            
-            // Additional validation for dates (if room booking)
-            if (type === 'room') {
-                const checkIn = document.getElementById('check_in');
-                const checkOut = document.getElementById('check_out');
-                
-                if (checkIn && checkOut) {
-                    const startDate = new Date(checkIn.value);
-                    const endDate = new Date(checkOut.value);
-                    
-                    if (endDate <= startDate) {
-                        alert("❌ Check-out date must be after check-in date.");
-                        return false;
-                    }
-                }
             }
             
             return true;

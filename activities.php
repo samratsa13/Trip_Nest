@@ -60,7 +60,7 @@ if (isset($_GET['q']) && $_GET['q'] !== '') {
     $search_key = strtolower(trim($_GET['q']));
     
     /* 
-       MERGE SORT (By Name)
+       Merge sort gareko name bata
     */
     function mergeSortActivities(array $arr): array {
         $count = count($arr);
