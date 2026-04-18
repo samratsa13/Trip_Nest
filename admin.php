@@ -328,7 +328,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Hotel name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Hotel name must be 3-100 characters";
-                }
+        } elseif (!preg_match('/^[a-zA-Z\s]+$/', $name)) {
+            $errors[] = "Hotel name must only contain alphabets and spaces";
+        }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -338,6 +340,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Location is required";
         } elseif (strlen($location) < 3 || strlen($location) > 100) {
             $errors[] = "Location must be 3-100 characters";
+        } elseif (!preg_match('/[a-zA-Z]/', $location)) {
+            $errors[] = "Location must contain at least one alphabet character";
         } elseif (!preg_match('/^[a-zA-Z0-9\s,\-]{3,100}$/', $location)) {
             $errors[] = "Location can only contain letters, numbers, spaces, commas, and hyphens";
         }
@@ -458,7 +462,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Hotel name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Hotel name must be 3-100 characters";
-                }
+        } elseif (!preg_match('/^[a-zA-Z\s]+$/', $name)) {
+            $errors[] = "Hotel name must only contain alphabets and spaces";
+        }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -468,6 +474,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Location is required";
         } elseif (strlen($location) < 3 || strlen($location) > 100) {
             $errors[] = "Location must be 3-100 characters";
+        } elseif (!preg_match('/[a-zA-Z]/', $location)) {
+            $errors[] = "Location must contain at least one alphabet character";
         } elseif (!preg_match('/^[a-zA-Z0-9\s,\-]{3,100}$/', $location)) {
             $errors[] = "Location can only contain letters, numbers, spaces, commas, and hyphens";
         }
@@ -563,7 +571,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Activity name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Activity name must be 3-100 characters";
-                }
+        } elseif (!preg_match('/^[a-zA-Z\s]+$/', $name)) {
+            $errors[] = "Activity name must only contain alphabets and spaces";
+        }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -622,7 +632,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $errors[] = "Activity name is required";
         } elseif (strlen($name) < 3 || strlen($name) > 100) {
             $errors[] = "Activity name must be 3-100 characters";
-                }
+        } elseif (!preg_match('/^[a-zA-Z\s]+$/', $name)) {
+            $errors[] = "Activity name must only contain alphabets and spaces";
+        }
         
         if (!empty($description) && strlen($description) > 1000) {
             $errors[] = "Description must be maximum 1000 characters";
@@ -2311,8 +2323,9 @@ try {
                 <div class="form-group">
                     <label for="hotel_name">Hotel Name *</label>
                     <input type="text" id="hotel_name" name="hotel_name" class="form-control" 
-                           pattern="^.{3,100}$" 
-                           title="Hotel name must be 3-100 characters"
+                           pattern="^[a-zA-Z\s]{3,100}$" 
+                           title="Hotel name must be 3-100 characters and contain only alphabets and spaces"
+                           oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')"
                            required>
                     <div id="hotel_name_error" class="field-error"></div>
                 </div>
@@ -2326,8 +2339,8 @@ try {
                 <div class="form-group">
                     <label for="hotel_location">Location *</label>
                     <input type="text" id="hotel_location" name="hotel_location" class="form-control" 
-                           pattern="^[a-zA-Z0-9\s,\-]{3,100}$" 
-                           title="Location must be 3-100 characters (letters, numbers, spaces, commas, hyphens)"
+                           pattern="^(?=.*[a-zA-Z])[a-zA-Z0-9\s,\-]{3,100}$" 
+                           title="Location must be 3-100 characters, contain at least one alphabet, and only contain letters, numbers, spaces, commas, hyphens"
                            required>
                     <div id="hotel_location_error" class="field-error"></div>
                 </div>
@@ -2369,8 +2382,9 @@ try {
                 <div class="form-group">
                     <label for="edit_hotel_name">Hotel Name *</label>
                     <input type="text" id="edit_hotel_name" name="hotel_name" class="form-control" 
-                           pattern="^.{3,100}$" 
-                           title="Hotel name must be 3-100 characters"
+                           pattern="^[a-zA-Z\s]{3,100}$" 
+                           title="Hotel name must be 3-100 characters and contain only alphabets and spaces"
+                           oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')"
                            required>
                     <div id="edit_hotel_name_error" class="field-error"></div>
                 </div>
@@ -2384,8 +2398,8 @@ try {
                 <div class="form-group">
                     <label for="edit_hotel_location">Location *</label>
                     <input type="text" id="edit_hotel_location" name="hotel_location" class="form-control" 
-                           pattern="^[a-zA-Z0-9\s,\-]{3,100}$" 
-                           title="Location must be 3-100 characters (letters, numbers, spaces, commas, hyphens)"
+                           pattern="^(?=.*[a-zA-Z])[a-zA-Z0-9\s,\-]{3,100}$" 
+                           title="Location must be 3-100 characters, contain at least one alphabet, and only contain letters, numbers, spaces, commas, hyphens"
                            required>
                     <div id="edit_hotel_location_error" class="field-error"></div>
                 </div>
@@ -2476,8 +2490,9 @@ try {
                 <div class="form-group">
                     <label for="activity_name">Activity Name *</label>
                     <input type="text" id="activity_name" name="activity_name" class="form-control" 
-                           pattern="^.{3,100}$" 
-                           title="Activity name must be 3-100 characters"
+                           pattern="^[a-zA-Z\s]{3,100}$" 
+                           title="Activity name must be 3-100 characters and contain only alphabets and spaces"
+                           oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')"
                            required>
                     <div id="activity_name_error" class="field-error"></div>
                 </div>
@@ -2526,8 +2541,9 @@ try {
                 <div class="form-group">
                     <label for="edit_activity_name">Activity Name *</label>
                     <input type="text" id="edit_activity_name" name="activity_name" class="form-control" 
-                           pattern="^.{3,100}$" 
-                           title="Activity name must be 3-100 characters"
+                           pattern="^[a-zA-Z\s]{3,100}$" 
+                           title="Activity name must be 3-100 characters and contain only alphabets and spaces"
+                           oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')"
                            required>
                     <div id="edit_activity_name_error" class="field-error"></div>
                 </div>

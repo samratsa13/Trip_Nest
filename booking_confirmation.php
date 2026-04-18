@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Strict Email Validation (No +, /, \, " etc allowed)
     // Allowed: letters, numbers, dot, underscore, dash, @
-    if (!preg_match("^(?!.*\.\.)[A-Za-z0-9]+([._%+-]?[A-Za-z0-9]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$", $guest_email)) {
+    if (!preg_match("/^[a-zA-Z][a-zA-Z0-9_\-]*(\.[a-zA-Z0-9_\-]+)*@[a-zA-Z]+\.[a-zA-Z]{2,}$/", $guest_email)) {
         $errors[] = "Email invalid or contains restricted symbols (+, /, \\, \", etc). Only letters, numbers, ., -, _ allowed.";
     } elseif (preg_match("/^\s/", $guest_email)) {
         $errors[] = "Email cannot start with a space.";
@@ -589,6 +589,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
                 return false;
+            }
+            
+            // Additional validation for dates (if room booking)
+            if (type === 'room') {
+                const checkIn = document.getElementById('check_in');
+                const checkOut = document.getElementById('check_out');
+                
+                if (checkIn && checkOut) {
+                    const startDate = new Date(checkIn.value);
+                    const endDate = new Date(checkOut.value);
+                    
+                    if (endDate <= startDate) {
+                        alert("❌ Check-out date must be after check-in date.");
+                        return false;
+                    }
+                }
             }
             
             return true;

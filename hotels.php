@@ -417,7 +417,7 @@ if (isset($_GET['id'])) {
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar">
+    <nav id="navbar" class="navbar">
         <h1 class="logo">Trip Nest</h1>
         <div class="nav-links">
             <a href="Tourism.php">Home</a>
