@@ -19,7 +19,7 @@ require_once 'db_connection.php';
             <a href="Tourism.php">Home</a>
             <a href="Tourism.php#itenary">Itinerary</a>
             <a href="destination.php">Destinations</a>
-            <a href="Tourism.php#contact">Contact</a>
+            <a href="Tourism.php#hotels">Hotel</a>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <a href="bookings.php">Bookings</a>
                 <a href="wishlist.php"><i class="fas fa-heart"></i> Wishlist</a>

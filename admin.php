@@ -3765,12 +3765,14 @@ try {
                         if (document.getElementById('metric-activity-revenue')) 
                             document.getElementById('metric-activity-revenue').innerText = 'NPR ' + parseFloat(data.revenue_activity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                             
+                        
                         // Update charts
                         updateCharts(data);
                     })
                     .catch(error => console.error('Fetch error:', error));
             }
             
+
             function updateCharts(data) {
                 // Bookings Type Chart
                 let typeChart = Chart.getChart('bookingsTypeChart');
