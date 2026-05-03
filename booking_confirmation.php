@@ -104,9 +104,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     // Insert Pending Booking without room_number logic
                     $hotel_id = $item['hotel_id'];
                     $insert_sql = "INSERT INTO hotel_bookings 
-                        (user_id, hotel_id, room_id, room_number, check_in, check_out, guest_name, guest_email, guest_phone, total_price_npr, quantity, status) 
-                        VALUES ($user_id, $hotel_id, $item_id, NULL, '$check_in', '$check_out', '$guest_name', '$guest_email', '$guest_phone', $total_price, $quantity, 'pending_payment')";
-                    
+                        (user_id, hotel_id, room_id, check_in, check_out, guest_name, guest_email, guest_phone, total_price_npr, quantity, status) 
+                        VALUES ($user_id, $hotel_id, $item_id, '$check_in', '$check_out', '$guest_name', '$guest_email', '$guest_phone', $total_price, $quantity, 'pending_payment')";                    
                     if (mysqli_query($conn, $insert_sql)) {
                         $booking_id = mysqli_insert_id($conn);
                     } else {
@@ -171,8 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </form>
         </div>";
         
-        // Remove from wishlist if needed (optional, maybe do it on success?)
-        // Doing it here or on success is fine. Let's do it on success.
     }
 }
 ?>

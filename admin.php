@@ -389,15 +389,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     ]);
                                     
                                     // Auto-generate physical room units immediately for the stock overview
-                                    $room_id = $pdo->lastInsertId();
-                                    $type_initial = strtoupper(substr(preg_replace('/[^a-zA-Z]/', '', $room['room_type']), 0, 1) ?: 'R');
-                                    $ac_initial   = strtoupper(substr($room['ac_type'], 0, 1));
-                                    $prefix = $type_initial . $ac_initial . "-R" . $room_id . "-";
+                                //     $room_id = $pdo->lastInsertId();
+                                //     $type_initial = strtoupper(substr(preg_replace('/[^a-zA-Z]/', '', $room['room_type']), 0, 1) ?: 'R');
+                                //     $ac_initial   = strtoupper(substr($room['ac_type'], 0, 1));
+                                //     $prefix = $type_initial . $ac_initial . "-R" . $room_id . "-";
                                     
-                                    $rn_stmt = $pdo->prepare("INSERT IGNORE INTO room_numbers (hotel_id, room_id, room_number, status) VALUES (?, ?, ?, 'available')");
-                                    for ($i = 1; $i <= $quantity; $i++) {
-                                        $rn_stmt->execute([$hotel_id, $room_id, $prefix . $i]);
-                                    }
+                                //     $rn_stmt = $pdo->prepare("INSERT IGNORE INTO room_numbers (hotel_id, room_id, room_number, status) VALUES (?, ?, ?, 'available')");
+                                //     for ($i = 1; $i <= $quantity; $i++) {
+                                //         $rn_stmt->execute([$hotel_id, $room_id, $prefix . $i]);
+                                //     }
                                 }
                             }
                         }
@@ -423,7 +423,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             unlink($hotel['image_path']);
         }
         
-        $pdo->prepare("DELETE FROM room_numbers WHERE hotel_id = ?")->execute([$hotel_id]);
+        
         $pdo->prepare("DELETE FROM hotel_rooms WHERE hotel_id = ?")->execute([$hotel_id]);
         
         $stmt = $pdo->prepare("DELETE FROM hotels WHERE id = ?");
@@ -528,7 +528,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     $room_stmt->execute([$room['room_type'], $room['ac_type'], $room['price_npr'], $quantity, $room['available'] ?? 1, $room_id, $hotel_id]);
                                     $existing_ids[] = $room_id;
                                     
-                                    // We are no longer using room_numbers so we don't sync it.
+                                    
                                 } else {
                                     // Insert new room
                                     $room_stmt = $pdo->prepare("INSERT INTO hotel_rooms (hotel_id, room_type, ac_type, price_npr, quantity, available) VALUES (?, ?, ?, ?, ?, ?)");
@@ -955,15 +955,15 @@ try {
     $activity_bookings = [];
 }
 
-try {
-    $room_numbers = $pdo->query("SELECT rn.*, h.name as hotel_name, hr.room_type, hr.ac_type 
-        FROM room_numbers rn 
-        JOIN hotels h ON rn.hotel_id = h.id 
-        JOIN hotel_rooms hr ON rn.room_id = hr.id 
-        ORDER BY h.name ASC, hr.room_type ASC, hr.ac_type ASC, LENGTH(rn.room_number) ASC, rn.room_number ASC")->fetchAll();
-} catch (PDOException $e) {
-    $room_numbers = [];
-}
+// try {
+//     $room_numbers = $pdo->query("SELECT rn.*, h.name as hotel_name, hr.room_type, hr.ac_type 
+//         FROM room_numbers rn 
+//         JOIN hotels h ON rn.hotel_id = h.id 
+//         JOIN hotel_rooms hr ON rn.room_id = hr.id 
+//         ORDER BY h.name ASC, hr.room_type ASC, hr.ac_type ASC, LENGTH(rn.room_number) ASC, rn.room_number ASC")->fetchAll();
+// } catch (PDOException $e) {
+//     $room_numbers = [];
+// }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -973,428 +973,7 @@ try {
     <title>Admin Panel - Trip Nest</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --primary: #031881;
-            --secondary: #6f7ecb;
-            --light: #f5f7fa;
-            --dark: #333;
-            --success: #28a745;
-            --warning: #ffc107;
-            --danger: #dc3545;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Poppins', sans-serif;
-        }
-        
-        body {
-            background-color: #f0f2f5;
-            display: flex;
-            min-height: 100vh;
-        }
-        
-        /* Sidebar */
-        .sidebar {
-            width: 250px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            color: white;
-            height: 100vh;
-            position: fixed;
-            transition: all 0.3s;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-        }
-        
-        .sidebar-header {
-            padding: 1.5rem;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .sidebar-header h2 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .sidebar-menu {
-            padding: 1rem 0;
-        }
-        
-        .sidebar-menu ul {
-            list-style: none;
-        }
-        
-        .sidebar-menu li {
-            margin-bottom: 0.5rem;
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 0.8rem 1.5rem;
-            color: white;
-            text-decoration: none;
-            transition: all 0.3s;
-        }
-        
-        .sidebar-menu a:hover, .sidebar-menu a.active {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-left: 4px solid white;
-        }
-        
-        .sidebar-menu i {
-            margin-right: 0.8rem;
-            font-size: 1.2rem;
-        }
-        
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            margin-left: 250px;
-            padding: 1.5rem;
-            transition: all 0.3s;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .header h1 {
-            color: var(--primary);
-            font-size: 1.8rem;
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .user-info img {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-        
-        /* Dashboard Cards */
-        .dashboard-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .card-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-        }
-        
-        .users .card-icon { background: rgba(40, 167, 69, 0.2); color: var(--success); }
-        .orders .card-icon { background: rgba(255, 193, 7, 0.2); color: var(--warning); }
-        /* Special offers card removed */
-        .itineraries .card-icon { background: rgba(220, 53, 69, 0.2); color: var(--danger); }
-        .destinations .card-icon { background: rgba(23, 162, 184, 0.2); color: #17a2b8; }
-        .hotels .card-icon { background: rgba(111, 126, 203, 0.2); color: var(--secondary); }
-        .activities .card-icon { background: rgba(255, 87, 34, 0.2); color: #ff5722; }
-        .bookings .card-icon { background: rgba(156, 39, 176, 0.2); color: #9c27b0; }
-        
-        .card h3 {
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .card p {
-            color: #666;
-            font-size: 0.9rem;
-        }
-        
-        /* Tables */
-        .table-container {
-            background: white;
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem;
-        }
-        
-        .table-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th, td {
-            padding: 0.8rem;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        th {
-            background-color: #f8f9fa;
-            font-weight: 600;
-        }
-        
-        tr:hover {
-            background-color: #f8f9fa;
-        }
-        
-        .status {
-            padding: 0.3rem 0.8rem;
-            border-radius: 1rem;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        
-        .status-pending { background: #fff3cd; color: #856404; }
-        .status-confirmed { background: #d1ecf1; color: #0c5460; }
-        .status-completed { background: #d4edda; color: #155724; }
-        .status-cancelled { background: #f8d7da; color: #721c24; }
-        
-        .btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 0.3rem;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-success { background: var(--success); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-warning { background: var(--warning); color: black; }
-        
-        .btn:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-        }
-        
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 2000;
-        }
-        
-        .modal[style*="display: block"],
-        .modal[style*="display: flex"] {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal-content {
-            background: white;
-            border-radius: 0.5rem;
-            width: 90%;
-            max-width: 600px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .close {
-            font-size: 1.5rem;
-            cursor: pointer;
-        }
-        
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 0.8rem;
-            border: 1px solid #ddd;
-            border-radius: 0.3rem;
-            font-size: 1rem;
-        }
-        
-        textarea.form-control {
-            min-height: 120px;
-            resize: vertical;
-        }
-        
-        /* Tabs */
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid #e0e0e0;
-            margin-bottom: 1rem;
-        }
-        
-        .tab {
-            padding: 0.8rem 1.5rem;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-        }
-        
-        .tab.active {
-            border-bottom: 3px solid var(--primary);
-            color: var(--primary);
-            font-weight: 600;
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 70px;
-            }
-            
-            .sidebar-header h2, .sidebar-menu span {
-                display: none;
-            }
-            
-            .sidebar-menu a {
-                justify-content: center;
-                padding: 1rem;
-            }
-            
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            
-            .main-content {
-                margin-left: 70px;
-            }
-            
-            .dashboard-cards {
-                grid-template-columns: 1fr;
-            }
-        }
-        .alert {
-            padding: 0.8rem 1.5rem;
-            border-radius: 0.3rem;
-            margin-bottom: 1rem;
-            font-weight: 500;
-        }
-        
-        .alert-success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .alert-error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .image-preview {
-            max-width: 200px;
-            max-height: 150px;
-            margin-top: 0.5rem;
-            border-radius: 0.3rem;
-            display: none;
-        }
-        
-        .status-badge {
-            padding: 0.3rem 0.8rem;
-            border-radius: 1rem;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        
-        .status-active { background: #d4edda; color: #155724; }
-        .status-inactive { background: #f8d7da; color: #721c24; }
-        
-        .action-buttons {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .btn-sm {
-            padding: 0.3rem 0.7rem;
-            font-size: 0.8rem;
-        }
-        
-        .text-muted {
-            color: #6c757d;
-            font-style: italic;
-        }
-        
-        .field-error {
-            color: #dc3545;
-            font-size: 0.8rem;
-            margin-top: 0.25rem;
-        }
-        
-        .form-control:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 0.2rem rgba(3, 24, 129, 0.25);
-        }
-        
-        .form-control.error {
-            border-color: #dc3545;
-        }
-    </style>
+    <link rel="stylesheet" href="admin.css">
 </head>
 <body>
     <!-- Sidebar -->
@@ -1412,7 +991,7 @@ try {
             <h1>Admin Dashboard</h1>
             <div class="user-info">
                 <span><?php echo htmlspecialchars($_SESSION['user_name']); ?></span>
-                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['user_name']); ?>&background=031881&color=fff" alt="Admin">
+                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['user_name']); ?>&background=4f46e5&color=fff" alt="Admin">
             </div>
         </div>
 
@@ -1452,7 +1031,7 @@ try {
                         <h3>Revenue Overview</h3>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
-                        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #031881, #6f7ecb); color: white; border-radius: 0.5rem;">
+                        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; border-radius: var(--radius-xl); box-shadow: var(--shadow-md);">
                             <h4 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Total Revenue</h4>
                             <h2 id="metric-total-revenue" style="margin: 0.5rem 0; font-size: 2rem;">NPR <?php echo number_format($total_revenue, 2); ?></h2>
                         </div>
@@ -1502,7 +1081,7 @@ try {
                 <div class="table-header">
                     <h3>Recent Users</h3>
                 </div>
-                <table>
+                <div class="table-responsive"><table>
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -1523,7 +1102,7 @@ try {
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
-                </table>
+                </table></div>
             </div>
 
            
@@ -1547,45 +1126,49 @@ try {
                     <div class="alert alert-error"><?php echo $user_error; ?></div>
                 <?php endif; ?>
                 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Address</th>
-                            <th>Email</th>
-                            <th>Phone</th>
-                            <th>Role</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($all_users as $user): ?>
-                        <tr>
-                            <td><?php echo $user['user_id']; ?></td>
-                            <td><?php echo htmlspecialchars($user['name']); ?></td>
-                            <td><?php echo htmlspecialchars($user['address'] ?? 'N/A'); ?></td>
-                            <td><?php echo htmlspecialchars($user['email']); ?></td>
-                            <td><?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></td>
-                            <td><?php echo htmlspecialchars($user['role']); ?></td>
-                            <td><?php echo date('M j, Y', strtotime($user['created_at'])); ?></td>
-                            <td>
-                                <div class="action-buttons">
-                                    <?php if ($user['user_id'] != $_SESSION['user_id']): ?>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                                        <button type="submit" name="delete_user" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this user?')">Delete</button>
-                                    </form>
-                                    <?php else: ?>
-                                    <span class="text-muted">Current User</span>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                <div class="data-card-grid">
+                    <?php if(empty($all_users)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-users"></i>
+                            No users found.
+                        </div>
+                    <?php else: ?>
+                    <?php foreach($all_users as $user): ?>
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600;">ID: #<?php echo $user['user_id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($user['name']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($user['role']) == 'admin' ? 'approved' : 'pending'; ?>" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                <?php echo htmlspecialchars($user['role']); ?>
+                            </span>
+                        </div>
+                        <div class="data-card-body">
+                            <div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600);"><i class="fas fa-envelope text-muted" style="width: 20px;"></i> <?php echo htmlspecialchars($user['email']); ?></div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.5rem;"><i class="fas fa-phone text-muted" style="width: 20px;"></i> <?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.5rem;"><i class="fas fa-map-marker-alt text-muted" style="width: 20px;"></i> <?php echo htmlspecialchars($user['address'] ?? 'N/A'); ?></div>
+                            </div>
+                            <div style="background: var(--gray-50); padding: 0.75rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid var(--gray-200);">
+                                <span style="color: var(--gray-600);"><i class="fas fa-calendar-alt text-muted"></i> Joined:</span>
+                                <span style="font-weight: 600; color: var(--gray-800); float: right;"><?php echo date('M j, Y', strtotime($user['created_at'])); ?></span>
+                            </div>
+                        </div>
+                        <div class="data-card-footer" style="padding: 1rem 1.5rem; display: flex; justify-content: flex-end;">
+                            <?php if ($user['user_id'] != $_SESSION['user_id']): ?>
+                            <form method="POST" style="margin: 0;">
+                                <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
+                                <button type="submit" name="delete_user" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this user?')">Delete</button>
+                            </form>
+                            <?php else: ?>
+                            <span class="text-muted" style="font-size: 0.85rem; font-weight: 600; padding: 0.4rem 0;">Current User</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1595,30 +1178,38 @@ try {
                 <div class="table-header">
                     <h3>All Orders</h3>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Order ID</th>
-                            <th>User</th>
-                            <th>Package</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($all_orders as $order): ?>
-                        <tr>
-                            <td>#<?php echo $order['id']; ?></td>
-                            <td><?php echo htmlspecialchars($order['user_name']); ?></td>
-                            <td><?php echo htmlspecialchars($order['package_name']); ?></td>
-                            <td>$<?php echo number_format($order['amount'], 2); ?></td>
-                            <td><span class="status status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></span></td>
-                            <td><?php echo date('M j, Y', strtotime($order['created_at'])); ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                <div class="data-card-grid">
+                    <?php if (empty($all_orders)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-shopping-cart"></i>
+                            No orders found.
+                        </div>
+                    <?php else: ?>
+                    <?php foreach($all_orders as $order): ?>
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600;">Order #<?php echo $order['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($order['package_name']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($order['status']); ?>" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: max-content;">
+                                <?php echo ucfirst($order['status']); ?>
+                            </span>
+                        </div>
+                        <div class="data-card-body">
+                            <div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600);"><i class="fas fa-user text-muted" style="width: 20px;"></i> <?php echo htmlspecialchars($order['user_name']); ?></div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.5rem;"><i class="fas fa-calendar-alt text-muted" style="width: 20px;"></i> <?php echo date('M j, Y', strtotime($order['created_at'])); ?></div>
+                            </div>
+                            <div style="background: var(--gray-50); padding: 0.75rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid var(--gray-200); display: flex; justify-content: space-between; margin-top: auto;">
+                                <span style="color: var(--gray-600); font-weight: 600;">Amount:</span>
+                                <span style="font-weight: 700; color: var(--primary);">$<?php echo number_format($order['amount'], 2); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1638,58 +1229,59 @@ try {
                     <div class="alert alert-error"><?php echo $itinerary_error; ?></div>
                 <?php endif; ?>
                 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Title</th>
-                            <th>Description</th>
-                            <th>Image</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($itineraries as $itinerary): ?>
-                        <tr>
-                            <td><?php echo $itinerary['id']; ?></td>
-                            <td><?php echo htmlspecialchars($itinerary['title']); ?></td>
-                            <td><?php echo htmlspecialchars(substr($itinerary['description'], 0, 100)) . '...'; ?></td>
-                            <td>
-                                <?php if (!empty($itinerary['image_path'])): ?>
-                                    <img src="<?php echo $itinerary['image_path']; ?>" alt="Itinerary Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
-                                <?php else: ?>
-                                    No Image
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $itinerary['status']; ?>">
-                                    <?php echo ucfirst($itinerary['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button type="button" class="btn btn-warning btn-sm" onclick="openDayModal(<?php echo $itinerary['id']; ?>, '<?php echo htmlspecialchars($itinerary['title']); ?>')" style="margin-right: 5px;">
-                                        <i class="fas fa-calendar"></i> Manage Days
+                <div class="data-card-grid">
+                    <?php if(empty($itineraries)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-map-marked-alt"></i>
+                            No itineraries found.
+                        </div>
+                    <?php else: ?>
+                    <?php foreach($itineraries as $itinerary): ?>
+                    <div class="data-card">
+                        <?php if (!empty($itinerary['image_path'])): ?>
+                            <img src="<?php echo $itinerary['image_path']; ?>" alt="Itinerary Image" class="data-card-image">
+                        <?php else: ?>
+                            <div class="data-card-image" style="background: var(--gray-200); display: flex; align-items: center; justify-content: center; color: var(--gray-400);">
+                                <i class="fas fa-image fa-3x"></i>
+                            </div>
+                        <?php endif; ?>
+                        <div class="data-card-header">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600;">ID: #<?php echo $itinerary['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($itinerary['title']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($itinerary['status']); ?>" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: max-content;">
+                                <?php echo ucfirst($itinerary['status']); ?>
+                            </span>
+                        </div>
+                        <div class="data-card-body">
+                            <p style="font-size: 0.9rem; color: var(--gray-600); margin: 0; line-height: 1.5;"><?php echo htmlspecialchars(substr($itinerary['description'], 0, 120)) . (strlen($itinerary['description']) > 120 ? '...' : ''); ?></p>
+                        </div>
+                        <div class="data-card-footer" style="padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <button type="button" class="btn btn-warning" onclick="openDayModal(<?php echo $itinerary['id']; ?>, '<?php echo htmlspecialchars(addslashes($itinerary['title']), ENT_QUOTES); ?>')" style="width: 100%; justify-content: center; padding: 0.5rem;">
+                                <i class="fas fa-calendar"></i> Manage Days
+                            </button>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <form method="POST" style="flex: 1; margin: 0;">
+                                    <input type="hidden" name="itinerary_id" value="<?php echo $itinerary['id']; ?>">
+                                    <select name="itinerary_status" onchange="this.form.submit()" class="form-control" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+                                        <option value="active" <?php echo $itinerary['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                        <option value="inactive" <?php echo $itinerary['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                    </select>
+                                    <input type="hidden" name="update_itinerary_status" value="1">
+                                </form>
+                                <form method="POST" style="margin: 0;">
+                                    <input type="hidden" name="itinerary_id" value="<?php echo $itinerary['id']; ?>">
+                                    <button type="submit" name="delete_itinerary" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this itinerary?')" style="padding: 0.5rem 1rem;">
+                                        <i class="fas fa-trash"></i>
                                     </button>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="itinerary_id" value="<?php echo $itinerary['id']; ?>">
-                                        <select name="itinerary_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
-                                            <option value="active" <?php echo $itinerary['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="inactive" <?php echo $itinerary['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                        </select>
-                                        <input type="hidden" name="update_itinerary_status" value="1">
-                                    </form>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="itinerary_id" value="<?php echo $itinerary['id']; ?>">
-                                        <button type="submit" name="delete_itinerary" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this itinerary?')">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1711,55 +1303,54 @@ try {
                     <div class="alert alert-error"><?php echo $destination_error; ?></div>
                 <?php endif; ?>
                 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Image</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach($destinations as $destination): ?>
-                        <tr>
-                            <td><?php echo $destination['id']; ?></td>
-                            <td><?php echo htmlspecialchars($destination['name']); ?></td>
-                            <td><?php echo htmlspecialchars(substr($destination['description'], 0, 100)) . '...'; ?></td>
-                            <td>
-                                <?php if (!empty($destination['image_path'])): ?>
-                                    <img src="<?php echo $destination['image_path']; ?>" alt="Destination Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
-                                <?php else: ?>
-                                    No Image
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $destination['status']; ?>">
-                                    <?php echo ucfirst($destination['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="destination_id" value="<?php echo $destination['id']; ?>">
-                                        <select name="destination_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
-                                            <option value="active" <?php echo $destination['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="inactive" <?php echo $destination['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                        </select>
-                                        <input type="hidden" name="update_destination_status" value="1">
-                                    </form>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="destination_id" value="<?php echo $destination['id']; ?>">
-                                        <button type="submit" name="delete_destination" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this destination?')">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                <div class="data-card-grid">
+                    <?php if(empty($destinations)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-map-marker-alt"></i>
+                            No destinations found.
+                        </div>
+                    <?php else: ?>
+                    <?php foreach($destinations as $destination): ?>
+                    <div class="data-card">
+                        <?php if (!empty($destination['image_path'])): ?>
+                            <img src="<?php echo $destination['image_path']; ?>" alt="Destination Image" class="data-card-image">
+                        <?php else: ?>
+                            <div class="data-card-image" style="background: var(--gray-200); display: flex; align-items: center; justify-content: center; color: var(--gray-400);">
+                                <i class="fas fa-image fa-3x"></i>
+                            </div>
+                        <?php endif; ?>
+                        <div class="data-card-header">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600;">ID: #<?php echo $destination['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($destination['name']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($destination['status']); ?>" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: max-content;">
+                                <?php echo ucfirst($destination['status']); ?>
+                            </span>
+                        </div>
+                        <div class="data-card-body">
+                            <p style="font-size: 0.9rem; color: var(--gray-600); margin: 0; line-height: 1.5;"><?php echo htmlspecialchars(substr($destination['description'], 0, 120)) . (strlen($destination['description']) > 120 ? '...' : ''); ?></p>
+                        </div>
+                        <div class="data-card-footer" style="padding: 1rem 1.5rem; display: flex; gap: 0.5rem;">
+                            <form method="POST" style="flex: 1; margin: 0;">
+                                <input type="hidden" name="destination_id" value="<?php echo $destination['id']; ?>">
+                                <select name="destination_status" onchange="this.form.submit()" class="form-control" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+                                    <option value="active" <?php echo $destination['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                    <option value="inactive" <?php echo $destination['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                </select>
+                                <input type="hidden" name="update_destination_status" value="1">
+                            </form>
+                            <form method="POST" style="margin: 0;">
+                                <input type="hidden" name="destination_id" value="<?php echo $destination['id']; ?>">
+                                <button type="submit" name="delete_destination" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this destination?')" style="padding: 0.5rem 1rem;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1779,64 +1370,59 @@ try {
                     <div class="alert alert-error"><?php echo $hotel_error; ?></div>
                 <?php endif; ?>
                 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Location</th>
-                            <th>Image</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($hotels)): ?>
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 2rem;">No hotels added yet.</td>
-                        </tr>
+                <div class="data-card-grid">
+                    <?php if(empty($hotels)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-hotel"></i>
+                            No hotels found.
+                        </div>
+                    <?php else: ?>
+                    <?php foreach($hotels as $hotel): ?>
+                    <div class="data-card">
+                        <?php if (!empty($hotel['image_path'])): ?>
+                            <img src="<?php echo $hotel['image_path']; ?>" alt="Hotel Image" class="data-card-image">
                         <?php else: ?>
-                        <?php foreach($hotels as $hotel): ?>
-                        <tr>
-                            <td><?php echo $hotel['id']; ?></td>
-                            <td><?php echo htmlspecialchars($hotel['name']); ?></td>
-                            <td><?php echo htmlspecialchars($hotel['location'] ?? 'N/A'); ?></td>
-                            <td>
-                                <?php if (!empty($hotel['image_path'])): ?>
-                                    <img src="<?php echo $hotel['image_path']; ?>" alt="Hotel Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
-                                <?php else: ?>
-                                    No Image
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $hotel['status']; ?>">
-                                    <?php echo ucfirst($hotel['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
-                                        <select name="hotel_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
-                                            <option value="active" <?php echo $hotel['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="inactive" <?php echo $hotel['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                        </select>
-                                        <input type="hidden" name="update_hotel_status" value="1">
-                                    </form>
-                                    <button type="button" class="btn btn-warning btn-sm" onclick="openEditHotelModal(<?php echo $hotel['id']; ?>, '<?php echo htmlspecialchars(addslashes($hotel['name']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($hotel['description'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($hotel['location'] ?? ''), ENT_QUOTES); ?>', '<?php echo $hotel['status']; ?>', '<?php echo $hotel['image_path'] ?? ''; ?>')" style="margin-right: 5px;">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
-                                        <button type="submit" name="delete_hotel" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this hotel?')">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
+                            <div class="data-card-image" style="background: var(--gray-200); display: flex; align-items: center; justify-content: center; color: var(--gray-400);">
+                                <i class="fas fa-image fa-3x"></i>
+                            </div>
                         <?php endif; ?>
-                    </tbody>
-                </table>
+                        <div class="data-card-header">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600;">ID: #<?php echo $hotel['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($hotel['name']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($hotel['status']); ?>" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: max-content;">
+                                <?php echo ucfirst($hotel['status']); ?>
+                            </span>
+                        </div>
+                        <div class="data-card-body">
+                            <div style="font-size: 0.9rem; color: var(--gray-600);"><i class="fas fa-map-marker-alt text-muted" style="width: 20px;"></i> <?php echo htmlspecialchars($hotel['location'] ?? 'N/A'); ?></div>
+                        </div>
+                        <div class="data-card-footer" style="padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <form method="POST" style="flex: 1; margin: 0;">
+                                    <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
+                                    <select name="hotel_status" onchange="this.form.submit()" class="form-control" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+                                        <option value="active" <?php echo $hotel['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                        <option value="inactive" <?php echo $hotel['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                    </select>
+                                    <input type="hidden" name="update_hotel_status" value="1">
+                                </form>
+                                <button type="button" class="btn btn-warning" onclick="openEditHotelModal(<?php echo $hotel['id']; ?>, '<?php echo htmlspecialchars(addslashes($hotel['name']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($hotel['description'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($hotel['location'] ?? ''), ENT_QUOTES); ?>', '<?php echo $hotel['status']; ?>', '<?php echo $hotel['image_path'] ?? ''; ?>')" style="padding: 0.5rem 1rem;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <form method="POST" style="margin: 0;">
+                                    <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
+                                    <button type="submit" name="delete_hotel" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this hotel?')" style="padding: 0.5rem 1rem;">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1856,66 +1442,63 @@ try {
                     <div class="alert alert-error"><?php echo $activity_error; ?></div>
                 <?php endif; ?>
                 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Price (NPR)</th>
-                            <th>Image</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($activities)): ?>
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 2rem;">No activities added yet.</td>
-                        </tr>
+                <div class="data-card-grid">
+                    <?php if(empty($activities)): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-hiking"></i>
+                            No activities found.
+                        </div>
+                    <?php else: ?>
+                    <?php foreach($activities as $activity): ?>
+                    <div class="data-card">
+                        <?php if (!empty($activity['image_path'])): ?>
+                            <img src="<?php echo $activity['image_path']; ?>" alt="Activity Image" class="data-card-image">
                         <?php else: ?>
-                        <?php foreach($activities as $activity): ?>
-                        <tr>
-                            <td><?php echo $activity['id']; ?></td>
-                            <td><?php echo htmlspecialchars($activity['name']); ?></td>
-                            <td><?php echo htmlspecialchars(substr($activity['description'] ?? '', 0, 100)) . '...'; ?></td>
-                            <td>NPR <?php echo number_format($activity['price_npr'], 2); ?></td>
-                            <td>
-                                <?php if (!empty($activity['image_path'])): ?>
-                                    <img src="<?php echo $activity['image_path']; ?>" alt="Activity Image" style="width: 80px; height: 60px; object-fit: cover; border-radius: 0.3rem;">
-                                <?php else: ?>
-                                    No Image
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="status-badge status-<?php echo $activity['status']; ?>">
-                                    <?php echo ucfirst($activity['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
-                                        <select name="activity_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block; margin-right: 5px;">
-                                            <option value="active" <?php echo $activity['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="inactive" <?php echo $activity['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                        </select>
-                                        <input type="hidden" name="update_activity_status" value="1">
-                                    </form>
-                                    <button type="button" class="btn btn-warning btn-sm" onclick="openEditActivityModal(<?php echo $activity['id']; ?>, '<?php echo htmlspecialchars(addslashes($activity['name']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($activity['description'] ?? ''), ENT_QUOTES); ?>', '<?php echo $activity['price_npr']; ?>', '<?php echo $activity['status']; ?>', '<?php echo $activity['image_path'] ?? ''; ?>')" style="margin-right: 5px;">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <form method="POST" style="display: inline;">
-                                        <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
-                                        <button type="submit" name="delete_activity" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this activity?')">Delete</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
+                            <div class="data-card-image" style="background: var(--gray-200); display: flex; align-items: center; justify-content: center; color: var(--gray-400);">
+                                <i class="fas fa-image fa-3x"></i>
+                            </div>
                         <?php endif; ?>
-                    </tbody>
-                </table>
+                        <div class="data-card-header">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600;">ID: #<?php echo $activity['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($activity['name']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($activity['status']); ?>" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: max-content;">
+                                <?php echo ucfirst($activity['status']); ?>
+                            </span>
+                        </div>
+                        <div class="data-card-body">
+                            <p style="font-size: 0.9rem; color: var(--gray-600); margin: 0; line-height: 1.5;"><?php echo htmlspecialchars(substr($activity['description'] ?? '', 0, 120)) . (strlen($activity['description'] ?? '') > 120 ? '...' : ''); ?></p>
+                            <div style="background: var(--gray-50); padding: 0.75rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid var(--gray-200); display: flex; justify-content: space-between; margin-top: auto;">
+                                <span style="color: var(--gray-600); font-weight: 600;">Price:</span>
+                                <span style="font-weight: 700; color: var(--primary);">NPR <?php echo number_format($activity['price_npr'], 2); ?></span>
+                            </div>
+                        </div>
+                        <div class="data-card-footer" style="padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <form method="POST" style="flex: 1; margin: 0;">
+                                    <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
+                                    <select name="activity_status" onchange="this.form.submit()" class="form-control" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+                                        <option value="active" <?php echo $activity['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                        <option value="inactive" <?php echo $activity['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                    </select>
+                                    <input type="hidden" name="update_activity_status" value="1">
+                                </form>
+                                <button type="button" class="btn btn-warning" onclick="openEditActivityModal(<?php echo $activity['id']; ?>, '<?php echo htmlspecialchars(addslashes($activity['name']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($activity['description'] ?? ''), ENT_QUOTES); ?>', '<?php echo $activity['price_npr']; ?>', '<?php echo $activity['status']; ?>', '<?php echo $activity['image_path'] ?? ''; ?>')" style="padding: 0.5rem 1rem;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <form method="POST" style="margin: 0;">
+                                    <input type="hidden" name="activity_id" value="<?php echo $activity['id']; ?>">
+                                    <button type="submit" name="delete_activity" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this activity?')" style="padding: 0.5rem 1rem;">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1935,126 +1518,139 @@ try {
                 <?php endif; ?>
                 
                 <h4 style="margin-top: 2rem; margin-bottom: 1rem;">Hotel Bookings</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>User</th>
-                            <th>Hotel</th>
-                            <th>Room</th>
-                            <th>Check-in</th>
-                            <th>Check-out</th>
-                            <th>Guest Info</th>
-                            <th>Total (NPR)</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($hotel_bookings)): ?>
-                        <tr>
-                            <td colspan="10" style="text-align: center; padding: 2rem;">No hotel bookings yet.</td>
-                        </tr>
-                        <?php else: ?>
-                        <?php foreach($hotel_bookings as $booking): ?>
-                        <tr>
-                            <td><?php echo $booking['id']; ?></td>
-                            <td><?php echo htmlspecialchars($booking['user_name']); ?></td>
-                            <td><?php echo htmlspecialchars($booking['hotel_name']); ?></td>
-                            <td><?php echo htmlspecialchars($booking['room_type'] . ' (' . $booking['ac_type'] . ')'); ?></td>
-                            <td><?php echo date('M j, Y', strtotime($booking['check_in'])); ?></td>
-                            <td><?php echo date('M j, Y', strtotime($booking['check_out'])); ?></td>
-                            <td>
-                                <small><?php echo htmlspecialchars($booking['guest_name']); ?><br>
-                                <?php echo htmlspecialchars($booking['guest_email']); ?><br>
-                                <?php echo htmlspecialchars($booking['guest_phone']); ?></small>
-                            </td>
-                            <td>NPR <?php echo number_format($booking['total_price_npr'], 2); ?></td>
-                            <td>
-                                <span class="status status-<?php echo strtolower($booking['status']); ?>">
-                                    <?php echo ucfirst($booking['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($booking['status'] == 'pending'): ?>
-                                <form method="POST" style="display: inline;">
-                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                    <input type="hidden" name="booking_type" value="hotel">
-                                    <select name="booking_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block;">
-                                        <option value="pending" <?php echo $booking['status'] == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                        <option value="approved">Approve</option>
-                                        <option value="rejected">Reject</option>
-                                    </select>
-                                    <input type="hidden" name="update_booking_status" value="1">
-                                </form>
-                                <?php else: ?>
-                                <span class="text-muted"><?php echo ucfirst($booking['status']); ?></span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+                    <?php if (empty($hotel_bookings)): ?>
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: white; border-radius: var(--radius-lg); color: #666; font-style: italic; box-shadow: var(--shadow-sm);">No hotel bookings yet.</div>
+                    <?php else: ?>
+                    <?php foreach($hotel_bookings as $booking): ?>
+                    <div style="background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); border: 1px solid var(--gray-200); overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s ease, box-shadow 0.2s ease;">
+                        <!-- Header -->
+                        <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: flex-start; background: var(--gray-50);">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Booking #<?php echo $booking['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($booking['hotel_name']); ?></h4>
+                                <div style="font-size: 0.85rem; color: var(--primary); font-weight: 500;"><i class="fas fa-bed"></i> <?php echo htmlspecialchars($booking['room_type'] . ' (' . $booking['ac_type'] . ')'); ?></div>
+                            </div>
+                            <span class="status status-<?php echo strtolower($booking['status']); ?>" style="padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem;">
+                                <?php echo ucfirst($booking['status']); ?>
+                            </span>
+                        </div>
+                        
+                        <!-- Body -->
+                        <div style="padding: 1.5rem; flex-grow: 1; display: flex; flex-direction: column; gap: 1rem;">
+                            <!-- Guest Info -->
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; font-weight: 600; margin-bottom: 0.25rem;">Guest Details</div>
+                                <div style="font-weight: 600; color: var(--gray-800);"><i class="fas fa-user-circle text-muted"></i> <?php echo htmlspecialchars($booking['guest_name']); ?> 
+                                    <span style="font-weight: 400; color: var(--gray-500); font-size: 0.85rem;">(Booked by: <?php echo htmlspecialchars($booking['user_name']); ?>)</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.25rem;"><i class="fas fa-envelope text-muted"></i> <?php echo htmlspecialchars($booking['guest_email']); ?></div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.25rem;"><i class="fas fa-phone text-muted"></i> <?php echo htmlspecialchars($booking['guest_phone']); ?></div>
+                            </div>
+                            
+                            <!-- Dates -->
+                            <div style="background: var(--gray-50); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--gray-200);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    <span style="color: var(--gray-600);"><i class="fas fa-sign-in-alt text-muted"></i> Check-in</span>
+                                    <span style="font-weight: 600; color: var(--gray-800);"><?php echo date('M j, Y', strtotime($booking['check_in'])); ?></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                                    <span style="color: var(--gray-600);"><i class="fas fa-sign-out-alt text-muted"></i> Check-out</span>
+                                    <span style="font-weight: 600; color: var(--gray-800);"><?php echo date('M j, Y', strtotime($booking['check_out'])); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div style="padding: 1.25rem 1.5rem; background: var(--gray-50); border-top: 1px solid var(--gray-200); margin-top: auto;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <span style="font-size: 0.85rem; color: var(--gray-600); font-weight: 600; text-transform: uppercase;">Total Price</span>
+                                <span style="font-size: 1.2rem; font-weight: 700; color: var(--gray-900);">NPR <?php echo number_format($booking['total_price_npr'], 2); ?></span>
+                            </div>
+                            
+                            <?php if ($booking['status'] == 'pending'): ?>
+                            <form method="POST" style="display: flex; gap: 0.5rem;">
+                                <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                <input type="hidden" name="booking_type" value="hotel">
+                                <input type="hidden" name="update_booking_status" value="1">
+                                <button type="submit" name="booking_status" value="approved" class="btn btn-primary" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; justify-content: center;">Approve</button>
+                                <button type="submit" name="booking_status" value="rejected" class="btn" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; background: #fee2e2; color: #dc2626; border-color: #fca5a5; justify-content: center;">Reject</button>
+                            </form>
+                            <?php else: ?>
+                            <div style="text-align: center; color: var(--gray-500); font-size: 0.9rem; font-weight: 500; padding: 0.5rem; background: var(--gray-100); border-radius: var(--radius-md);">
+                                <i class="fas <?php echo $booking['status'] == 'approved' ? 'fa-check-circle' : 'fa-times-circle'; ?>"></i> Booking is <?php echo ucfirst($booking['status']); ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
 
                 <h4 style="margin-top: 3rem; margin-bottom: 1rem;">Activity Bookings</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>User</th>
-                            <th>Activity</th>
-                            <th>Booking Date</th>
-                            <th>Guest Info</th>
-                            <th>Total (NPR)</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($activity_bookings)): ?>
-                        <tr>
-                            <td colspan="8" style="text-align: center; padding: 2rem;">No activity bookings yet.</td>
-                        </tr>
-                        <?php else: ?>
-                        <?php foreach($activity_bookings as $booking): ?>
-                        <tr>
-                            <td><?php echo $booking['id']; ?></td>
-                            <td><?php echo htmlspecialchars($booking['user_name']); ?></td>
-                            <td><?php echo htmlspecialchars($booking['activity_name']); ?></td>
-                            <td><?php echo date('M j, Y', strtotime($booking['booking_date'])); ?></td>
-                            <td>
-                                <small><?php echo htmlspecialchars($booking['guest_name']); ?><br>
-                                <?php echo htmlspecialchars($booking['guest_email']); ?><br>
-                                <?php echo htmlspecialchars($booking['guest_phone']); ?></small>
-                            </td>
-                            <td>NPR <?php echo number_format($booking['total_price_npr'], 2); ?></td>
-                            <td>
-                                <span class="status status-<?php echo strtolower($booking['status']); ?>">
-                                    <?php echo ucfirst($booking['status']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($booking['status'] == 'pending'): ?>
-                                <form method="POST" style="display: inline;">
-                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                    <input type="hidden" name="booking_type" value="activity">
-                                    <select name="booking_status" onchange="this.form.submit()" class="form-control" style="width: 120px; display: inline-block;">
-                                        <option value="pending" <?php echo $booking['status'] == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                        <option value="approved">Approve</option>
-                                        <option value="rejected">Reject</option>
-                                    </select>
-                                    <input type="hidden" name="update_booking_status" value="1">
-                                </form>
-                                <?php else: ?>
-                                <span class="text-muted"><?php echo ucfirst($booking['status']); ?></span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+                    <?php if (empty($activity_bookings)): ?>
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: white; border-radius: var(--radius-lg); color: #666; font-style: italic; box-shadow: var(--shadow-sm);">No activity bookings yet.</div>
+                    <?php else: ?>
+                    <?php foreach($activity_bookings as $booking): ?>
+                    <div style="background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); border: 1px solid var(--gray-200); overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s ease, box-shadow 0.2s ease;">
+                        <!-- Header -->
+                        <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: flex-start; background: var(--gray-50);">
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Booking #<?php echo $booking['id']; ?></span>
+                                <h4 style="margin: 0.25rem 0; color: var(--gray-900); font-size: 1.1rem;"><?php echo htmlspecialchars($booking['activity_name']); ?></h4>
+                            </div>
+                            <span class="status status-<?php echo strtolower($booking['status']); ?>" style="padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem;">
+                                <?php echo ucfirst($booking['status']); ?>
+                            </span>
+                        </div>
+                        
+                        <!-- Body -->
+                        <div style="padding: 1.5rem; flex-grow: 1; display: flex; flex-direction: column; gap: 1rem;">
+                            <!-- Guest Info -->
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; font-weight: 600; margin-bottom: 0.25rem;">Guest Details</div>
+                                <div style="font-weight: 600; color: var(--gray-800);"><i class="fas fa-user-circle text-muted"></i> <?php echo htmlspecialchars($booking['guest_name']); ?> 
+                                    <span style="font-weight: 400; color: var(--gray-500); font-size: 0.85rem;">(Booked by: <?php echo htmlspecialchars($booking['user_name']); ?>)</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.25rem;"><i class="fas fa-envelope text-muted"></i> <?php echo htmlspecialchars($booking['guest_email']); ?></div>
+                                <div style="font-size: 0.85rem; color: var(--gray-600); margin-top: 0.25rem;"><i class="fas fa-phone text-muted"></i> <?php echo htmlspecialchars($booking['guest_phone']); ?></div>
+                            </div>
+                            
+                            <!-- Dates -->
+                            <div style="background: var(--gray-50); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--gray-200);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                                    <span style="color: var(--gray-600);"><i class="far fa-calendar-alt text-muted"></i> Booking Date</span>
+                                    <span style="font-weight: 600; color: var(--gray-800);"><?php echo date('M j, Y', strtotime($booking['booking_date'])); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div style="padding: 1.25rem 1.5rem; background: var(--gray-50); border-top: 1px solid var(--gray-200); margin-top: auto;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <span style="font-size: 0.85rem; color: var(--gray-600); font-weight: 600; text-transform: uppercase;">Total Price</span>
+                                <span style="font-size: 1.2rem; font-weight: 700; color: var(--gray-900);">NPR <?php echo number_format($booking['total_price_npr'], 2); ?></span>
+                            </div>
+                            
+                            <?php if ($booking['status'] == 'pending'): ?>
+                            <form method="POST" style="display: flex; gap: 0.5rem;">
+                                <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                <input type="hidden" name="booking_type" value="activity">
+                                <input type="hidden" name="update_booking_status" value="1">
+                                <button type="submit" name="booking_status" value="approved" class="btn btn-primary" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; justify-content: center;">Approve</button>
+                                <button type="submit" name="booking_status" value="rejected" class="btn" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; background: #fee2e2; color: #dc2626; border-color: #fca5a5; justify-content: center;">Reject</button>
+                            </form>
+                            <?php else: ?>
+                            <div style="text-align: center; color: var(--gray-500); font-size: 0.9rem; font-weight: 500; padding: 0.5rem; background: var(--gray-100); border-radius: var(--radius-md);">
+                                <i class="fas <?php echo $booking['status'] == 'approved' ? 'fa-check-circle' : 'fa-times-circle'; ?>"></i> Booking is <?php echo ucfirst($booking['status']); ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
         
@@ -3812,8 +3408,8 @@ try {
                         labels: ['Hotel Bookings', 'Activity Bookings'],
                         datasets: [{
                             data: [<?php echo $hotel_bookings_count; ?>, <?php echo $activity_bookings_count; ?>],
-                            backgroundColor: ['rgba(111, 126, 203, 0.8)', 'rgba(255, 87, 34, 0.8)'],
-                            borderColor: ['rgba(111, 126, 203, 1)', 'rgba(255, 87, 34, 1)'],
+                            backgroundColor: ['rgba(79, 70, 229, 0.8)', 'rgba(255, 87, 34, 0.8)'],
+                            borderColor: ['rgba(79, 70, 229, 1)', 'rgba(255, 87, 34, 1)'],
                             borderWidth: 2
                         }]
                     },
@@ -3896,11 +3492,11 @@ try {
                                 <?php echo $total_revenue_activity; ?>
                             ],
                             backgroundColor: [
-                                'rgba(111, 126, 203, 0.8)',
+                                'rgba(79, 70, 229, 0.8)',
                                 'rgba(255, 87, 34, 0.8)'
                             ],
                             borderColor: [
-                                'rgba(111, 126, 203, 1)',
+                                'rgba(79, 70, 229, 1)',
                                 'rgba(255, 87, 34, 1)'
                             ],
                             borderWidth: 2
@@ -4075,3 +3671,4 @@ try {
     </script>
 </body>
 </html>
+

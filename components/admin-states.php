@@ -11,17 +11,6 @@
         </div>
     </div>
     
-    <!-- <div class="card orders">
-        <div class="card-header">
-            <div>
-                <h3><?php echo $order_count; ?></h3>
-                <p>Total Orders</p>
-            </div>
-            <div class="card-icon">
-                <i class="fas fa-shopping-cart"></i>
-            </div>
-        </div>
-    </div> -->
     <div class="card itineraries">
         <div class="card-header">
             <div>
